@@ -4,7 +4,7 @@
 #   work/smali-hg-mod/**/*.smali        —— 红果外层全部类（含官方挪入类，用于壳端点初筛）
 #   work/added-classes.txt              —— 真新增类名清单（壳端点候选主集）
 #   work/overlap-classes.txt            —— 与番茄画像重合（A 类）
-#   work/added-dex/fanqie/**/*.dex      —— 番茄 16a 壳外层 dex（同 regex 现扫，画像端点集）
+#   work/fanqie/fq-mod/**/*.dex         —— 番茄 16a 壳外层 dex（同 regex 现扫，画像端点集）
 # 输出：work/diff-out/docs/hg1-endpoints.md
 import os, re, sys
 from collections import defaultdict
@@ -13,7 +13,7 @@ work = sys.argv[1]
 HG_SMALI = os.path.join(work, 'smali-hg-mod')
 HG_ADD = os.path.join(work, 'added-classes.txt')
 HG_OVL = os.path.join(work, 'overlap-classes.txt')
-FQ_DIR = os.path.join(work, 'added-dex', 'fanqie')
+FQ_DIR = os.path.join(work, 'fanqie', 'fq-mod')
 OUT = os.path.join(work, 'diff-out', 'docs', 'hg1-endpoints.md')
 
 STR_RE = re.compile(r'^\s*const-string(?:/16|/jumbo)?\s+v\d+,\s*"((?:[^"\\]|\\.)*)"\s*$')
