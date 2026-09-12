@@ -38,10 +38,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p work && cd work
-          gh release download samples -R "$GITHUB_REPOSITORY" -p 'hongguo-v7.3.6.32-member.apk' -p 'hongguo-73632-inner-official.apk' -D .
+          gh release download samples -R "$GITHUB_REPOSITORY" -p 'hongguo-v7.3.6.32-crack.apk' -p 'hongguo-73632-inner-official.apk' -D .
           # 番茄样本走公网直链：仓 PUBLIC，GITHUB_TOKEN 不授权跨仓 gh api（本机实测直链匿名 206）
           mkdir -p fanqie
           curl -sSL -o fanqie/fanqie-73368-mod-218M.apk https://github.com/callacat/fanqie-adfree-builder/releases/download/samples/fanqie-73368-mod-218M.apk
+          mv hongguo-v7.3.6.32-crack.apk hongguo-v7.3.6.32-member.apk
           echo "1c2c0bb49aa7d5b849cb08e8e5e5768dceb920285052155498399fad51b751cd  hongguo-v7.3.6.32-member.apk" | sha256sum -c -
           echo "8f062c16bd3bc78ef542adc08086907423d40b3f19873e936e496bf5e98bdcfd  hongguo-73632-inner-official.apk" | sha256sum -c -
           echo "fdf7e7c1b56a0f3409bf4bf3d1a9c7c252f43d951de0debdbccbb8ff798a3024  fanqie/fanqie-73368-mod-218M.apk" | sha256sum -c -
