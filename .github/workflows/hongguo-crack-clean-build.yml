@@ -1,0 +1,152 @@
+name: hongguo-crack-clean-build
+
+# HG-2：红果 v7.3.6.32 净化重打包——去除 C 类后门 com/b/a 设备指纹链，A/B/D 全保留（rid recvuZTO9AeaYr）
+# 老马终判：A=92.6% 重合壳类全留；B=去广告 patch 全留；C=唯一清除 com/b/a(init/getID/getReflect 外部引用断链)；D=会员徽章全留
+# 原则：掐入口不撒网（学番茄 16b/17b）——不整删类、不碰 so/内层 base.apk；内层 sha256 字节级不动为构建门
+# 签名：codery keystore（与 v9 同源）。⚠ 作者 CN=L 私钥无从获取（仅有证书），净化版互相可覆盖装；覆盖装作者原版需先卸载
+# 版权红线：样本/产物 APK 不入 git（Release 分发）；大文件只下行不上传
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ github.token }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK（build-tools 35）
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-30" "build-tools;35.0.0" > /dev/null
+          echo "BT=$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: 下载 apktool 3.0.3
+        run: |
+          curl -sSL -o /usr/local/bin/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
+          java -jar /usr/local/bin/apktool.jar --version
+
+      - name: 拉样本 + sha256 校验（asset 名 crack.apk，mv 对齐后续引用；禁大文件上传）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work && cd work
+          gh release download samples -R "$GITHUB_REPOSITORY" -p 'hongguo-v7.3.6.32-crack.apk' -p 'hongguo-73632-inner-official.apk' -D .
+          mv hongguo-v7.3.6.32-crack.apk hongguo-v7.3.6.32-member.apk
+          echo "1c2c0bb49aa7d5b849cb08e8e5e5768dceb920285052155498399fad51b751cd  hongguo-v7.3.6.32-member.apk" | sha256sum -c -
+          echo "8f062c16bd3bc78ef542adc08086907423d40b3f19873e936e496bf5e98bdcfd  hongguo-73632-inner-official.apk" | sha256sum -c -
+          df -h .
+
+      - name: apktool d -r 解外层（-r 保资源不重编，降 aapt 面）
+        run: |
+          cd work
+          java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o mod_src hongguo-v7.3.6.32-member.apk
+          echo "smali 树: $(find mod_src -name '*.smali' | wc -l) 文件 ｜ dex 目录: $(ls -d mod_src/smali* | wc -l)"
+          echo "== 内层完整性门①：apktool 解出的 base.apk 必须 == 内层官方包 =="
+          sha256sum mod_src/assets/base.apk
+          echo "8f062c16bd3bc78ef542adc08086907423d40b3f19873e936e496bf5e98bdcfd  mod_src/assets/base.apk" | sha256sum -c -
+
+      - name: C 类后门清除 patch（全树外部 invoke-NOP，返回值兜底）
+        run: |
+          cd work
+          python3 ../scripts/hg2_patch_c.py "$PWD/mod_src" | tee patch-hg2.log
+          grep -q 'HG2_PATCH_DONE' patch-hg2.log || { echo '!! patch 脚本未正常结束'; exit 1; }
+          HIT=$(grep -oP 'total_invokes=\K[0-9]+' patch-hg2.log)
+          echo "外部断链 invoke 命中=$HIT（老马终判=2）"
+          # 资源脏条目清理（番茄五跑实锤：作者包 res/values/public.xml 有 aapt2 拒收的 invalid 类型 + res/invalid* 目录）
+          sed -i 's|<public type="invalid[0-9]*" |<public type="ignore_me" |g' mod_src/res/values/public.xml 2>/dev/null || true
+          sed -i '/type="ignore_me"/d' mod_src/res/values/public.xml 2>/dev/null || true
+          rm -rf mod_src/res/invalid*
+          echo "public.xml invalid 残留: $(grep -c 'invalid' mod_src/res/values/public.xml 2>/dev/null || echo 0)"
+
+      - name: patch 自检（外部活引用=0 硬门 + 内部家族类保留核验）
+        run: |
+          cd work
+          echo "== 活引用残留扫描（com/b 家族本体自引用豁免）=="
+          R=$(grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG2-NOP-C' | grep -v 'mod_src/smali[^/]*/com/b/' | wc -l)
+          echo "外部残留=$R（必须 0）"
+          [ "$R" = "0" ] || { echo '!! 存在未断的外部活调用'; grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG2-NOP-C' | grep -v 'mod_src/smali[^/]*/com/b/' | head; exit 1; }
+          echo "== com/b/a 家族类保留核验（3 类全在，防误删）=="
+          find mod_src/smali*/com/b -name 'a*.smali' | sort
+          [ "$(find mod_src/smali*/com/b -name 'a*.smali' | wc -l)" = "3" ] || { echo '!! 家族类数≠3'; exit 1; }
+          echo "== MuteApplication 入口断链落位 =="
+          grep -c 'HG2-NOP-C' mod_src/smali*/com/tencent/tinker/loader/MuteApplication.smali
+          # 命中明细进日志备查
+          grep 'HG2_HIT' patch-hg2.log
+
+      - name: apktool b 重建（-f 强编；dex 219MB 重汇编预计 10-20min）
+        run: |
+          cd work
+          java -Xmx8g -jar /usr/local/bin/apktool.jar b -f mod_src -o clean-unsigned.apk
+          ls -la clean-unsigned.apk
+
+      - name: zipalign(-p 16) + apksigner v1+v2+v3（codery keystore）
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd work
+          "$BT/zipalign" -f -p 16 clean-unsigned.apk clean-aligned.apk
+          echo "$KEYSTORE_BASE64" | base64 -d > codery.keystore
+          "$BT/apksigner" sign --ks codery.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out signed.apk clean-aligned.apk
+          "$BT/apksigner" verify --verbose --print-certs signed.apk | tee verify-hg2.txt
+          sha256sum signed.apk
+
+      - name: 构建后门②：内层 base.apk 字节级不变 + dex 数 + C 链静默抽查
+        run: |
+          cd work
+          python3 - <<'EOF'
+          import zipfile, hashlib
+          z = zipfile.ZipFile('signed.apk')
+          b = z.read('assets/base.apk')
+          h = hashlib.sha256(b).hexdigest()
+          print('产物内层 base.apk sha256:', h)
+          assert h == '8f062c16bd3bc78ef542adc08086907423d40b3f19873e936e496bf5e98bdcfd', '内层完整性破坏!!'
+          dexs = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+          print('外层 dex 数:', len(dexs))
+          assert len(dexs) == 23, 'dex 数异常!!'
+          # 抽查：dex 里 com/b/a 类还在（保留策略），但产物 dex 字符串区不要求变化——断链在字节码引用层
+          print('HG2_INTEGRITY_PASS')
+          EOF
+
+      - name: 计算 round + 发 Release + 回写文档
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          N=$(( $(gh release list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -oE 'hg2-round[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) + 1 ))
+          [ "$N" -ge 1 ] || N=1
+          OUT="hongguo-v7.3.6.32-clean-r${N}.apk"
+          cp work/signed.apk "work/$OUT"
+          sha256sum "work/$OUT" | tee work/sha256-hg2.txt
+          gh release create "hg2-round${N}" --title "HG-2 净化重打包 round ${N}" --notes "C 类后门 com/b/a 断链版；A/B/D 保留；内层 base.apk 字节级不变（sha256 门过）；codery keystore v1v2v3。run ${GITHUB_RUN_ID}" "work/$OUT" work/patch-hg2.log work/verify-hg2.txt work/sha256-hg2.txt
+          cp work/patch-hg2.log docs/hg2-patch.log
+          cp work/verify-hg2.txt docs/hg2-verify.txt
+          git config user.name "codery-ci"
+          git config user.email "codery-ci@noreply"
+          git add docs/
+          git commit -m "docs(HG-2): round ${N} 净化构建产物——patch log + 签名验证（apk 见 Release hg2-round${N}）" || echo "无变更"
+          git pull --rebase origin main && git push origin main
+          echo "HG2_ARTIFACT=hongguo-v7.3.6.32-clean-r${N}.apk" >> "$GITHUB_ENV"
+          echo "HG2_SHA=$(cut -d' ' -f1 work/sha256-hg2.txt)" >> "$GITHUB_ENV"
+          echo "== 产物 $OUT sha=$(cut -d' ' -f1 work/sha256-hg2.txt) size=$(stat -c %s "work/$OUT")"
+
+      - name: 清理版权物
+        if: always()
+        run: rm -rf work
