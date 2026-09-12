@@ -1,0 +1,3 @@
+HG2_PATCH_DONE external_files=1 total_invokes=1 internal_skipped=2
+HG2_HIT 1  smali_classes13/com/tencent/tinker/loader/MuteApplication.smali
+HG2_COUNT_WARN 外部 invoke 命中=1（老马终判=2，偏差需人工核，不阻断但报告标红）
