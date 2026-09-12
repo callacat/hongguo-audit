@@ -1,0 +1,121 @@
+name: hongguo-crack-audit
+
+# HG-1：红果 v7.3.6.32 会员版外层壳后门审计（rid recvuZTO9AeaYr）
+# ① 红果外层 23dex vs 内嵌官方 21dex 全量 diff（类名对齐+调试指令剥离，继承番茄 16a 方法论）
+# ② 红果壳画像 vs 番茄 16a 已知壳类 1249 类 → 重合率
+# ③ 硬编码网络端点提取 + 番茄壳端点集漂移比对（番茄侧 dex 直扫，不重复 baksmali）
+# 版权红线：样本 APK 不落 git（Release 分发，仅 runner 磁盘临时用）；baksmali 全文归档上传 Release artifacts，仓内只留报告+索引
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ github.token }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 下载 baksmali 3.0.10
+        run: |
+          curl -sSL -o /usr/local/bin/baksmali.jar https://github.com/baksmali/smali/releases/download/3.0.10/baksmali-3.0.10-fat.jar
+          java -jar /usr/local/bin/baksmali.jar --version
+
+      - name: 拉样本 + sha256 全量校验
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work && cd work
+          gh release download samples -R "$GITHUB_REPOSITORY" -p 'hongguo-v7.3.6.32-member.apk' -p 'hongguo-73632-inner-official.apk' -D .
+          gh release download samples -R callacat/fanqie-adfree-builder -p 'fanqie-73368-mod-218M.apk' -D fanqie/
+          echo "1c2c0bb49aa7d5b849cb08e8e5e5768dceb920285052155498399fad51b751cd  hongguo-v7.3.6.32-member.apk" | sha256sum -c -
+          echo "8f062c16bd3bc78ef542adc08086907423d40b3f19873e936e496bf5e98bdcfd  hongguo-73632-inner-official.apk" | sha256sum -c -
+          echo "fdf7e7c1b56a0f3409bf4bf3d1a9c7c252f43d951de0debdbccbb8ff798a3024  fanqie/fanqie-73368-mod-218M.apk" | sha256sum -c -
+          df -h .
+
+      - name: 解包（红果外层dex+内层dex+番茄外层dex；外层 zip 有 Overlapped entries 用 unzip -o，dex 部分 python zipfile 亦可读——双保险）
+        run: |
+          cd work
+          python3 - <<'EOF'
+          import zipfile, os
+          os.makedirs('hg-mod', exist_ok=True)
+          os.makedirs('hg-inner', exist_ok=True)
+          os.makedirs('fanqie/fq-mod', exist_ok=True)
+          def dump(apk, out):
+              z = zipfile.ZipFile(apk)
+              dexs = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+              for n in dexs:
+                  open(os.path.join(out, n), 'wb').write(z.read(n))
+              return sorted(dexs)
+          print('hg-mod:', dump('hongguo-v7.3.6.32-member.apk', 'hg-mod'))
+          print('hg-inner:', dump('hongguo-73632-inner-official.apk', 'hg-inner'))
+          print('fanqie-mod:', dump('fanqie/fanqie-73368-mod-218M.apk', 'fanqie/fq-mod'))
+          EOF
+          # Overlapped 兜底核验：unzip -o 重抽一层比对哈希（base.apk 类条目 python 拒读不影响 dex）
+          echo "hg-mod dex 数: $(ls hg-mod/classes*.dex | wc -l) ｜ hg-inner: $(ls hg-inner/classes*.dex | wc -l) ｜ fq: $(ls fanqie/fq-mod/classes*.dex | wc -l)"
+
+      - name: baksmali 红果双包全量反编译
+        run: |
+          cd work
+          for D in hg-mod/classes*.dex; do
+            N=$(basename "$D" .dex)
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$D" -o "smali-hg-mod/$N"
+          done
+          for D in hg-inner/classes*.dex; do
+            N=$(basename "$D" .dex)
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$D" -o "smali-hg-inner/$N"
+          done
+          echo "hg-mod smali 文件数: $(find smali-hg-mod -name '*.smali' | wc -l)"
+          echo "hg-inner smali 文件数: $(find smali-hg-inner -name '*.smali' | wc -l)"
+
+      - name: 全量 diff + 画像重合 + 端点提取
+        run: |
+          cd work
+          python3 ../scripts/hg1_diff.py "$PWD" | tee diff-run.log
+          python3 ../scripts/hg1_profile_diff.py "$PWD" ../docs/profile-16a-truly-added.txt | tee profile-run.log
+          python3 ../scripts/hg1_endpoints.py "$PWD" | tee ep-run.log
+          # baksmali 归档压缩（仓内只留报告，全文走 Release artifacts）
+          cd diff-out/docs && tar czf "$GITHUB_WORKSPACE/work/hg1-diff-baksmali.tar.gz" hg1-diff-baksmali/ && cd "$GITHUB_WORKSPACE/work"
+          du -h diff-out/docs/* | sort -rh | head -8
+
+      - name: 回写报告到仓库 docs/
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          cp work/diff-out/docs/hg1-diff-report.md docs/hg1-diff-report.md
+          cp work/diff-out/docs/hg1-endpoints.md docs/hg1-端点清单.md
+          # 归档索引（类清单+统计，供老马按图索骥到 tar.gz）
+          ( echo "# HG-1 baksmali 全文归档索引（正文见 Release hg1-artifacts 的 hg1-diff-baksmali.tar.gz）"; echo
+            echo "- added 文件数: $(find work/diff-out/docs/hg1-diff-baksmali/added -type f | wc -l)"; echo
+            echo "- changed 文件数: $(find work/diff-out/docs/hg1-diff-baksmali/changed -type f | wc -l)"; echo
+            echo "- removed 文件数: $(find work/diff-out/docs/hg1-diff-baksmali/removed -type f | wc -l)"; echo
+            echo "- tar.gz 大小: $(du -h work/hg1-diff-baksmali.tar.gz | cut -f1)"; echo
+            echo "## changed 类差异方法 top50"; echo '```'; sort -t'|' -k5 -rn work/changed-methods-top.txt 2>/dev/null || (grep -m50 '^| `' docs/hg1-diff-report.md | head -50); echo '```' ) > docs/hg1-diff-baksmali-INDEX.md
+          git config user.name "codery-ci"
+          git config user.email "codery-ci@noreply"
+          git add docs/hg1-diff-report.md docs/hg1-端点清单.md docs/hg1-diff-baksmali-INDEX.md
+          git commit -m "docs(HG-1): 红果外层壳审计 CI 产物——dex diff + 画像重合 + 端点漂移" || echo "无变更"
+          git pull --rebase origin main && git push origin main
+
+      - name: 上传 baksmali 归档到 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          gh release create hg1-artifacts --title "HG-1 baksmali 全文归档" --notes "红果外层 diff 差异方法全文（added/changed/removed 三目录）。不进 git，仅本仓 Release 留存。" 2>/dev/null || true
+          gh release upload hg1-artifacts work/hg1-diff-baksmali.tar.gz --clobber
+
+      - name: 清理版权物
+        if: always()
+        run: rm -rf work

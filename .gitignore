@@ -1,0 +1,6 @@
+*.apk
+*.apks
+*.tar.gz
+work/
+__pycache__/
+*.pyc
