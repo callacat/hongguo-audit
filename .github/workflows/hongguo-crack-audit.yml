@@ -103,7 +103,7 @@ jobs:
             echo "- changed 文件数: $(find work/diff-out/docs/hg1-diff-baksmali/changed -type f | wc -l)"; echo
             echo "- removed 文件数: $(find work/diff-out/docs/hg1-diff-baksmali/removed -type f | wc -l)"; echo
             echo "- tar.gz 大小: $(du -h work/hg1-diff-baksmali.tar.gz | cut -f1)"; echo
-            echo "## changed 类差异方法 top50"; echo '```'; sort -t'|' -k5 -rn work/changed-methods-top.txt 2>/dev/null || (grep -m50 '^| `' docs/hg1-diff-report.md | head -50); echo '```' ) > docs/hg1-diff-baksmali-INDEX.md
+            echo "## 差异方法最多的前 50 类（从报告 §3 表格截取）"; echo '```'; awk '/^\| 类 \| \+新增/{f=1;next} f&&/^\|/{n++;if(n>50)exit} f&&!/^\|/{exit} f{print}' docs/hg1-diff-report.md; echo '```' ) > docs/hg1-diff-baksmali-INDEX.md
           git config user.name "codery-ci"
           git config user.email "codery-ci@noreply"
           git add docs/hg1-diff-report.md docs/hg1-端点清单.md docs/hg1-diff-baksmali-INDEX.md
