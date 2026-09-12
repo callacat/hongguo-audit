@@ -130,8 +130,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          N=$(( $(gh release list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -oE 'hg2-round[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1) + 1 ))
-          [ "$N" -ge 1 ] || N=1
+          LAST=$(gh release list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -oE 'hg2-round[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1 || true)
+          N=$(( ${LAST:-0} + 1 ))
           OUT="hongguo-v7.3.6.32-clean-r${N}.apk"
           cp work/signed.apk "work/$OUT"
           sha256sum "work/$OUT" | tee work/sha256-hg2.txt
