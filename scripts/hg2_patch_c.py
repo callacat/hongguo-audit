@@ -4,9 +4,11 @@
 #   com/b/ 包内自引用豁免（init→getApplication→Android_id→getReflect 是链内部，保留无害，入口一断永不执行）。
 # 输入：mod_src（apktool d 解出目录，含 smali*/）
 # 输出：原地改写 .smali + stdout 命中明细（供 hg2 报告回填，断言外部命中数=2）
-import os, re, sys
+import os, re, sys, difflib
 
 mod_src = sys.argv[1]
+diff_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(mod_src.rstrip('/')), 'hg2-point-diff')
+os.makedirs(diff_dir, exist_ok=True)
 TARGET = 'Lcom/b/a;'
 
 INVOKE_RE = re.compile(r'^(\s*)invoke-([a-z]+)\s+\{([^}]*)\},\s*' + re.escape(TARGET) + r'->([\w$<>]+)\(([^)]*)\)(\S+)\s*$')
@@ -94,7 +96,16 @@ for d in sorted(os.listdir(mod_src)):
                 continue
             newtxt, hits = patch_file(p)
             if hits:
-                external_hits[os.path.relpath(p, mod_src)] = hits
+                rel = os.path.relpath(p, mod_src)
+                external_hits[rel] = hits
+                # 逐点位 diff 证据：原文件临时备份 → unified diff 落 diff_dir
+                orig = '\n'.join(open(p, encoding='utf-8', errors='replace').read().split('\n'))
+                diffp = os.path.join(diff_dir, rel.replace(os.sep, '__') + '.diff')
+                with open(diffp, 'w', encoding='utf-8') as df:
+                    for ln in difflib.unified_diff(orig.split('\n'), newtxt.split('\n'),
+                                                   fromfile='a/' + rel, tofile='b/' + rel, lineterm=''):
+                        df.write(ln + '\n')
+                print(f'HG2_DIFF {rel} -> {diffp}')
                 open(p, 'w', encoding='utf-8').write(newtxt)
 
 print(f'HG2_PATCH_DONE external_files={len(external_hits)} total_invokes={sum(external_hits.values())} internal_skipped={internal_skipped}')
