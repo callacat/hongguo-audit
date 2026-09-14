@@ -1,0 +1,225 @@
+name: hongguo-crack-clean-build-param
+
+# HG-3b：红果 v7.3.7.32 C 类单点净化重打包（参数化版）。冻结克隆自 hongguo-crack-clean-build.yml
+# （HG-2 v736 线，一行不动），参数化模式沿用 hongguo-crack-audit-param.yml（HG-3a 实锤）。
+# 老马 HG-3a 终判唯一点位（勿扩面）：classes14/com/tencent/tinker/loader/MuteApplication.smali
+#   .method public onCreate()V 内 invoke-static {}, Lcom/b/a;->init()V → 原地注释 NOP（HG-2 保守法）。
+# 家族本体 com/b/a* 3 类不删不动；A 壳 1125 类 / B patch 3527 改类 / D 业务新增（含 classes24
+#   dragon 系 1172 注入类）全部保留。
+# 完整性硬门：① 解包后 mod_src/assets/base.apk sha256 == 内层官方包（字节级不动）
+#            ② 构建后产物内层 base.apk sha 恒等 + dex 数恒等
+#            ③ 产物 smali 回读三门（hg3b_verify_product.py）：NOP 落位 / com/b 外零外部 invoke / 家族 3 类恒等
+# 签名：codery keystore（secrets 已在仓，v1+v2+v3 + zipalign -P 16）。产物名 hongguo-${VER}-clean-r${N}-${ENGINE}.apk，
+#   Release tag ${TAG}-round${N}-${ENGINE}（CI 自增发号，hg2-round1 模式），apk 不入 git。
+#
+# 触发设计（同 HG-3a 实锤）：workflow_dispatch 事件仅当文件存在于默认分支才收，本任务禁 push main，
+# 故加 push 自触发口：仅匹配本文件 + hg3b 两脚本变更（docs 回写永不命中→无环）。
+on:
+  workflow_dispatch:
+    inputs:
+      apk_version:
+        description: 外层壳包版本号（空=默认 v7.3.7.32）
+        default: ''
+      crack_asset:
+        description: Release samples 中外层破解包资产名（空=默认）
+        default: ''
+      crack_sha256:
+        description: 外层破解包 sha256（空=默认）
+        default: ''
+      inner_asset:
+        description: Release samples 中内嵌官方包资产名（空=默认）
+        default: ''
+      inner_sha256:
+        description: 内嵌官方包 sha256=构建完整性门（空=默认）
+        default: ''
+      dex_count:
+        description: 外层 dex 数恒等门（空=默认 24）
+        default: ''
+      report_tag:
+        description: 产物前缀 TAG（空=hg3b）
+        default: ''
+      engine:
+        description: 引擎标识（空=cc），决定 Release tag/资产名后缀与 docs 文件防双线碰撞
+        default: ''
+  push:
+    branches: ['hg3-cc']
+    paths:
+      - '.github/workflows/hongguo-crack-clean-build-param.yml'
+      - 'scripts/hg3b_patch_c.py'
+      - 'scripts/hg3b_verify_product.py'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      # 参数单源：dispatch inputs 覆盖，push 触发（inputs 空）落回默认=v737+cc
+      VER: ${{ inputs.apk_version || 'v7.3.7.32' }}
+      CRACK: ${{ inputs.crack_asset || 'hongguo-v7.3.7.32-crack.apk' }}
+      CRACK_SHA: ${{ inputs.crack_sha256 || '337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e' }}
+      INNER: ${{ inputs.inner_asset || 'hongguo-73732-inner-official.apk' }}
+      INNER_SHA: ${{ inputs.inner_sha256 || 'a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9' }}
+      DEX_COUNT: ${{ inputs.dex_count || '24' }}
+      TAG: ${{ inputs.report_tag || 'hg3b' }}
+      ENGINE: ${{ inputs.engine || 'cc' }}
+    steps:
+      - name: Checkout（运行分支，回写推同分支）
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ github.token }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK（build-tools 35）
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-30" "build-tools;35.0.0" > /dev/null
+          echo "BT=$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: 下载 apktool 3.0.3 + baksmali 3.0.10（产物回读门用）
+        run: |
+          curl -sSL -o /usr/local/bin/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
+          java -jar /usr/local/bin/apktool.jar --version
+          curl -sSL -o /usr/local/bin/baksmali.jar https://github.com/baksmali/smali/releases/download/3.0.10/baksmali-3.0.10-fat.jar
+          java -jar /usr/local/bin/baksmali.jar --version
+
+      - name: 拉样本 + sha256 校验（Release samples，禁大文件上传）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work && cd work
+          echo "== 参数: VER=$VER CRACK=$CRACK INNER=$INNER DEX_COUNT=$DEX_COUNT TAG=$TAG ENGINE=$ENGINE (run $GITHUB_RUN_ID @ $GITHUB_REF_NAME)"
+          gh release download samples -R "$GITHUB_REPOSITORY" -p "$CRACK" -p "$INNER" -D .
+          echo "$CRACK_SHA  $CRACK" | sha256sum -c -
+          echo "$INNER_SHA  $INNER" | sha256sum -c -
+          df -h .
+
+      - name: 解外层（-r 保资源不重编；外层 zip 有 Overlapped entries，HG-3a 实锤）
+        run: |
+          cd work
+          java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o mod_src "$CRACK"
+          echo "smali 树: $(find mod_src -name '*.smali' | wc -l) 文件 ｜ dex 目录: $(ls -d mod_src/smali* | wc -l)"
+          echo "== 完整性硬门①：解出的 assets/base.apk 必须 == 内层官方包（字节级不动）=="
+          sha256sum mod_src/assets/base.apk
+          echo "$INNER_SHA  mod_src/assets/base.apk" | sha256sum -c -
+
+      - name: C 类单点净化 patch（老马终判唯一点位，hits≠1 即中断构建）
+        run: |
+          cd work
+          python3 ../scripts/hg3b_patch_c.py "$PWD/mod_src" "$PWD/hg3b-point-diff" | tee patch-hg3b.log
+          grep -q 'HG3B_PATCH_DONE hits=1' patch-hg3b.log || { echo '!! 单点 patch 未正常结束'; exit 1; }
+          # 资源脏条目清理（HG-2 实锤：作者包 res/values/public.xml 有 aapt2 拒收的 invalid 类型 + res/invalid* 目录）
+          sed -i 's|<public type="invalid[0-9]*" |<public type="ignore_me" |g' mod_src/res/values/public.xml 2>/dev/null || true
+          sed -i '/type="ignore_me"/d' mod_src/res/values/public.xml 2>/dev/null || true
+          rm -rf mod_src/res/invalid*
+          echo "public.xml invalid 残留: $(grep -c 'invalid' mod_src/res/values/public.xml || true)"
+
+      - name: patch 源侧自检（表外活引用=0 硬门 + 家族 3 类保留 + NOP 落位=1）
+        run: |
+          cd work
+          echo "== 外部活引用残留扫描（com/b 家族本体自引用豁免，NOP 注释行豁免）=="
+          R=$(grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG3B-NOP-C' | grep -v 'mod_src/smali[^/]*/com/b/' | wc -l)
+          echo "外部残留=$R（必须 0）"
+          [ "$R" = "0" ] || { echo '!! 存在未断的外部活调用（扩面/漏点红旗）'; grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG3B-NOP-C' | grep -v 'mod_src/smali[^/]*/com/b/' | head; exit 1; }
+          echo "== com/b/a 家族类保留核验（3 类全在，防误删）=="
+          find mod_src/smali*/com/b -name '*.smali' | sort
+          [ "$(find mod_src/smali*/com/b -name '*.smali' | wc -l)" = "3" ] || { echo '!! 家族类数≠3'; exit 1; }
+          echo "== 唯一点位 NOP 落位（恰 1 处，勿扩面）=="
+          M=$(grep -c 'HG3B-NOP-C' mod_src/smali*/com/tencent/tinker/loader/MuteApplication.smali || true)
+          echo "NOP 标记=$M（必须 1）"
+          [ "$M" = "1" ] || exit 1
+
+      - name: 重建（dex 238MB 级重汇编，预计 10-20min）
+        run: |
+          cd work
+          java -Xmx8g -jar /usr/local/bin/apktool.jar b -f mod_src -o clean-unsigned.apk
+          ls -la clean-unsigned.apk
+
+      - name: zipalign(-p 16) + apksigner v1+v2+v3（codery keystore）
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd work
+          "$BT/zipalign" -f -p 16 clean-unsigned.apk clean-aligned.apk
+          echo "$KEYSTORE_BASE64" | base64 -d > codery.keystore
+          "$BT/apksigner" sign --ks codery.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out signed.apk clean-aligned.apk
+          "$BT/apksigner" verify --verbose --print-certs signed.apk | tee verify-hg3b.txt
+          sha256sum signed.apk
+
+      - name: 完整性硬门②：产物内层 base.apk 字节级不变 + dex 数恒等
+        run: |
+          cd work
+          python3 - <<'EOF'
+          import zipfile, hashlib, os
+          z = zipfile.ZipFile('signed.apk')
+          b = z.read('assets/base.apk')
+          h = hashlib.sha256(b).hexdigest()
+          print('产物内层 base.apk sha256:', h)
+          assert h == os.environ['INNER_SHA'], '内层完整性破坏!!'
+          dexs = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+          print('外层 dex 数:', len(dexs))
+          assert len(dexs) == int(os.environ['DEX_COUNT']), 'dex 数与样本基线不符!!'
+          print('HG3B_INTEGRITY_PASS')
+          EOF
+
+      - name: 完整性硬门③：产物 smali 回读三门（NOP 落位 / 零外部 invoke / 家族恒等）
+        run: |
+          cd work
+          mkdir -p prod_dex prod_smali
+          unzip -o -q signed.apk 'classes*.dex' -d prod_dex || true
+          # 子集=含 'Lcom/b/a;'/'Lcom/b/a$' 类描述符或 'MuteApplication' 字符串的 dex（三门判据全部落在此子集内）
+          NSUB=0
+          for D in prod_dex/classes*.dex; do
+            N=$(basename "$D" .dex)
+            if grep -aqE 'Lcom/b/a(;|\$)|MuteApplication' "$D"; then
+              java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$D" -o "prod_smali/$N"
+              NSUB=$((NSUB+1))
+            fi
+          done
+          echo "回读子集 dex 数=$NSUB"
+          [ "$NSUB" -ge 1 ] || { echo '!! 子集选择异常（产物里找不到任何后门相关 dex）'; exit 1; }
+          python3 ../scripts/hg3b_verify_product.py "$PWD/prod_smali" "$PWD/mod_src" | tee verify-readback-hg3b.log
+          grep -q 'HG3B_VERIFY_OK' verify-readback-hg3b.log || { echo '!! 产物回读硬门失败'; exit 1; }
+
+      - name: 计算 round + 发 Release + 回写文档到运行分支
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          LAST=$(gh release list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -oE "${TAG}-round[0-9]+-${ENGINE}" | grep -oE '[0-9]+' | sort -n | tail -1 || true)
+          N=$(( ${LAST:-0} + 1 ))
+          OUT="hongguo-${VER}-clean-r${N}-${ENGINE}.apk"
+          cp work/signed.apk "work/$OUT"
+          sha256sum "work/$OUT" | tee work/sha256-hg3b.txt
+          SIZE=$(stat -c %s "work/$OUT")
+          SHA=$(cut -d' ' -f1 work/sha256-hg3b.txt)
+          gh release create "${TAG}-round${N}-${ENGINE}" --title "HG-3b 净化重打包 ${VER} round ${N}（${ENGINE}）" \
+            --notes "C 类唯一点位断链（MuteApplication.onCreate init-NOP）；A/B/D 全保留；内层 base.apk 字节级不变（三门硬验：sha 恒等+产物回读 NOP 落位+家族 3 类恒等）；codery keystore v1v2v3。run ${GITHUB_RUN_NUMBER} / ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+产物: $OUT size=$SIZE sha256=$SHA" \
+            "work/$OUT" work/patch-hg3b.log work/verify-hg3b.txt work/verify-readback-hg3b.log work/sha256-hg3b.txt work/hg3b-point-diff/MuteApplication.onCreate.diff
+          cp work/patch-hg3b.log "docs/${TAG}-patch-${ENGINE}.log"
+          cp work/verify-hg3b.txt "docs/${TAG}-verify-${ENGINE}.txt"
+          cp work/verify-readback-hg3b.log "docs/${TAG}-verify-readback-${ENGINE}.log"
+          cp work/hg3b-point-diff/MuteApplication.onCreate.diff "docs/${TAG}-point-diff-${ENGINE}.diff"
+          git config user.name "codery-ci"
+          git config user.email "codery-ci@noreply"
+          git add docs/
+          git commit -m "docs($TAG): $VER 净化构建 round ${N} 产物证据（engine=$ENGINE, run $GITHUB_RUN_ID）——patch log+签名验证+回读三门+点位 diff" || echo "无变更"
+          git pull --rebase origin "${{ github.ref_name }}" && git push origin "HEAD:${{ github.ref_name }}"
+          echo "== 产物 $OUT sha=$SHA size=$SIZE tag=${TAG}-round${N}-${ENGINE}"
+
+      - name: 清理版权物
+        if: always()
+        run: rm -rf work
