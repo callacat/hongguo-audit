@@ -58,3 +58,10 @@
 - All build gates passed; Release `hg3b-codex-r4` created.
 - Asset: `hongguo-v7.3.7.32-clean-r4-codex.apk`; size `277643531`; SHA-256 `033f89e00ef0c211ac82ac5b6cd53db5f98a6aa1edec1b3c5d585986d1b929d1`.
 - Failure was evidence copy path: `hg3b-point-diff` is under `work/`; corrected.
+
+## Final success
+
+- Run `34900712742` completed with conclusion `success`.
+- Evidence commit returned by CI: `6f7f5d2`.
+- Final Release: `hg3b-codex-r5`; asset `hongguo-v7.3.7.32-clean-r5-codex.apk`; size `277643531`; SHA-256 `64d47684adf515df05c151492fda3d2feff7f2f0315a602fe48b1fd061cb5685`.
+- Final report: `docs/hg3b-report-codex.md`.
