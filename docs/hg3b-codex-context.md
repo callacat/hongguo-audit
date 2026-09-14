@@ -24,3 +24,9 @@
 
 - Gate 1 passed with inner base.apk SHA-256 `a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9`.
 - Failure: patch path mistakenly looked for `smali_classes4`; corrected to the audited `smali_classes14` entry.
+
+## Run 34897535552
+
+- Patch succeeded at `smali_classes14/com/tencent/tinker/loader/MuteApplication.smali` line 1129 (`HG3B_PATCH_DONE files=1 invokes=1`).
+- Failure: family retention checks mistakenly looked under `classes14`; audit lists `com/b/a`, `com/b/a$Android_id`, and `com/b/a$Reflect` under `classes23`.
+- Fix: moved family retention checks to `smali_classes23`.
