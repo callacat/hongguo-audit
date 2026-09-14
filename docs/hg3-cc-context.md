@@ -7,11 +7,18 @@
 - [x] 现状盘点：HG-1 workflow/三脚本读毕；基线数字取齐（见下）
 - [x] 脚本参数化：hg1_diff/hg1_profile_diff/hg1_endpoints 改 HG_TAG/HG_VER env 驱动，默认值保持 HG-1 行为；构造样例双模式回归通过（commit 4e60886）
 - [x] 新脚本：scripts/hg3_scan_c.py（C 家族存续复扫，只读）+ scripts/hg3_dex_attribution.py（dex 归属解剖）（commit a24e994）
-- [ ] workflow 参数化：.github/workflows/hongguo-crack-audit-param.yml 新写（输入版本/资产/sha/tag/engine；外层 unzip -o；回写 dispatch 分支；Release hg3-artifacts-cc）
-- [ ] push origin hg3-cc + dispatch
-- [ ] CI 跑通（可能需 1-2 轮修错重触发）
+- [x] workflow 参数化：.github/workflows/hongguo-crack-audit-param.yml 新写（commit 9532fc4）
+- [x] **排障实锤**：workflow_dispatch 收事件要求文件在默认分支（官方文档 #onworkflow_dispatch），
+      hg3-cc push 后 12+ 分钟不注册、dispatch API 404。任务禁推 main ⇒ 死锁。解法=加 push 自触发口
+      （branches:[hg3-cc] × paths:[本文件]，workflow 定义取运行分支合规；inputs 空值落 job env `||` 默认）（commit a6ab94c）
+- [x] push 触发起跑：**run 34875020820**（hg3-cc, push 事件）——后台 gh run watch 盯梢
+- [ ] CI 跑通 conclusion=success（挂则读 log 修错：改 workflow 文件即再触发一轮）
 - [ ] 下载归档核验 + 组装 docs/hg3-diff-report-cc.md
 - [ ] 汇报（表格/群/A2A 三选一）
+
+## 已知瑕疵待收口
+- a6ab94c 曾误入库 `.hg3-prompt-cc.md`（派单原文；57e7ced 已移出跟踪+gitignore，仅存于历史 commit）。
+  run 终态后对 hg3-cc 做历史清理（rebase 掉该文件后 force-push）——force 前确认无 in-progress run。
 
 ## 路线决策（对 HG-1 线破坏最小原则）
 1. **不改** hongguo-crack-audit.yml：它 checkout main/推 main/写 docs/hg1-*，动它=动已收官线。复制为 -param.yml，HG-1 线冻结。
@@ -34,6 +41,6 @@
 ## 环境备忘（本机会话）
 - gh/git 走代理：`HTTPS_PROXY=http://192.168.1.150:30001`（gh）；repo 已配 http.proxy（git）
 - token 有效（gh api user=callacat）；D7 铁律：本机禁 apktool/baksmali/大 dex，重活全 CI
-- dispatch 命令模板：
-  `HTTPS_PROXY=... gh workflow run hongguo-crack-audit-param.yml --ref hg3-cc -R callacat/hongguo-audit`（inputs 走默认值即 v737 双样本+tag=hg3+engine=cc）
-- 看 run：`gh run list/ watch/view --log-failed`
+- **触发方式（本轮实测定版）**：dispatch 口在文件合入 main 前不可用（GitHub 默认分支限制）；
+  现行重触发=编辑本 workflow 文件任意处（含注释）push 到 hg3-cc 即起跑；docs/脚本 push 不触发。
+- 看 run：`gh run list/ watch/view --log-failed -R callacat/hongguo-audit`；本轮 run=34875020820
