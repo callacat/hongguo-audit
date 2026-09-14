@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# HG-1：硬编码网络端点提取 + 番茄壳端点集比对（漂移项单列）
+# HG 线通用：硬编码网络端点提取 + 番茄壳端点集比对（漂移项单列）
+# HG-3a 参数化：HG_TAG/HG_VER 环境变量驱动输出与标题（默认 hg1/v7.3.6.32=历史行为）。
 # 输入：
 #   work/smali-hg-mod/**/*.smali        —— 红果外层全部类（含官方挪入类，用于壳端点初筛）
 #   work/added-classes.txt              —— 真新增类名清单（壳端点候选主集）
@@ -10,11 +11,13 @@ import os, re, sys
 from collections import defaultdict
 
 work = sys.argv[1]
+TAG = os.environ.get('HG_TAG', 'hg1')
+VER = os.environ.get('HG_VER', 'v7.3.6.32')
 HG_SMALI = os.path.join(work, 'smali-hg-mod')
 HG_ADD = os.path.join(work, 'added-classes.txt')
 HG_OVL = os.path.join(work, 'overlap-classes.txt')
 FQ_DIR = os.path.join(work, 'fanqie', 'fq-mod')
-OUT = os.path.join(work, 'diff-out', 'docs', 'hg1-endpoints.md')
+OUT = os.path.join(work, 'diff-out', 'docs', f'{TAG}-endpoints.md')
 
 STR_RE = re.compile(r'^\s*const-string(?:/16|/jumbo)?\s+v\d+,\s*"((?:[^"\\]|\\.)*)"\s*$')
 URL_RE = re.compile(r'https?://[a-zA-Z0-9_\-./:%~#?&=]+')
@@ -134,7 +137,7 @@ drift_ips = hg_ips - fq_ips
 drift_doms = hg_doms - fq_doms
 
 L = []
-L.append('# HG-1 外层硬编码网络端点清单')
+L.append(f'# {TAG.upper()} 红果 {VER} 外层硬编码网络端点清单')
 L.append('')
 L.append('> 方法：baksmali const-string 全量扫描（红果）+ dex 字符串区 regex（番茄壳，同口径正则）。')
 L.append('> 端点集定义：红果端点=真新增类∩画像重合（A 壳）；漂移项=红果壳端点−番茄壳端点。')
@@ -230,5 +233,5 @@ L.append('')
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write('\n'.join(L))
 
-print(f'HG1-EP hgA urls={len(hg_urls)} ips={len(hg_ips)} doms={len(hg_doms)} | fq urls={len(fq_urls)} ips={len(fq_ips)} doms={len(fq_doms)} | drift urls={len(drift_urls)} doms={len(drift_doms)} red={RED}')
-print(f'HG1-EP BCD-with-endpoints={rows} official-urls={len(off_urls)}')
+print(f'HG{TAG[2:] if TAG.startswith("hg") else TAG.upper()}-EP hgA urls={len(hg_urls)} ips={len(hg_ips)} doms={len(hg_doms)} | fq urls={len(fq_urls)} ips={len(fq_ips)} doms={len(fq_doms)} | drift urls={len(drift_urls)} doms={len(drift_doms)} red={RED}')
+print(f'HG{TAG[2:] if TAG.startswith("hg") else TAG.upper()}-EP BCD-with-endpoints={rows} official-urls={len(off_urls)}')

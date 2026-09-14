@@ -1,0 +1,173 @@
+name: hongguo-crack-audit-param
+
+# HG-3+：红果破解壳外层后门审计（参数化版）。对既有 hongguo-crack-audit.yml（HG-1 线，冻结不动）的
+# 无破坏克隆升级：样本版本/资产名/sha 全部参数化，job env 单源默认值=v7.3.7.32 双样本。
+# ① 外层 vs 内嵌官方 dex 全量 diff ② 画像重合 ③ 端点提取+漂移（同 HG-1 三件套）
+# ④ HG-3 新增：com/b/a C 家族存续点位复扫 + 外层独有 dex 归属解剖（classes24=真新增还是重排）
+# 回写：docs/{tag}-*-{engine}.md 推到运行分支（不碰 main）；baksmali 归档 Release {tag}-artifacts-{engine}
+# 版权红线同 HG-1：APK 不落 git，仅 runner 临时磁盘。
+#
+# 触发设计（HG-3a cc 实锤排障，2026-09-15）：GitHub 官方约束=workflow_dispatch 事件仅当 workflow
+# 文件存在于【默认分支】才收（docs: workflow-syntax #onworkflow_dispatch），而本任务禁止 push main。
+# 故加 push 自触发口做本轮起跑：仅匹配本文件自身变更（docs 回写永不命中→无环）。
+# 文件随 hg3 线未来合入 main 后，workflow_dispatch 口即自然激活（inputs 覆盖默认值跑后续版本轮）。
+on:
+  workflow_dispatch:
+    inputs:
+      apk_version:
+        description: 外层壳包版本号（空=用默认 v7.3.7.32）
+        default: ''
+      crack_asset:
+        description: Release samples 中外层破解包资产名（空=默认）
+        default: ''
+      crack_sha256:
+        description: 外层破解包 sha256（空=默认）
+        default: ''
+      inner_asset:
+        description: Release samples 中内嵌官方包资产名（空=默认）
+        default: ''
+      inner_sha256:
+        description: 内嵌官方包 sha256（空=默认）
+        default: ''
+      report_tag:
+        description: 产物前缀 HG_TAG（空=hg3）
+        default: ''
+      engine:
+        description: 引擎标识（空=cc），决定 docs 文件与 Release 后缀防双线碰撞
+        default: ''
+  push:
+    branches: ['hg3-cc']
+    paths:
+      - '.github/workflows/hongguo-crack-audit-param.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      # 参数单源：dispatch inputs 覆盖，push 触发（inputs 空）落回默认=v737+cc
+      VER: ${{ inputs.apk_version || 'v7.3.7.32' }}
+      CRACK: ${{ inputs.crack_asset || 'hongguo-v7.3.7.32-crack.apk' }}
+      CRACK_SHA: ${{ inputs.crack_sha256 || '337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e' }}
+      INNER: ${{ inputs.inner_asset || 'hongguo-73732-inner-official.apk' }}
+      INNER_SHA: ${{ inputs.inner_sha256 || 'a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9' }}
+      TAG: ${{ inputs.report_tag || 'hg3' }}
+      ENGINE: ${{ inputs.engine || 'cc' }}
+      HG_TAG: ${{ inputs.report_tag || 'hg3' }}
+      HG_VER: ${{ inputs.apk_version || 'v7.3.7.32' }}
+    steps:
+      - name: Checkout（运行分支，回写推同分支）
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ github.token }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 下载 baksmali 3.0.10
+        run: |
+          curl -sSL -o /usr/local/bin/baksmali.jar https://github.com/baksmali/smali/releases/download/3.0.10/baksmali-3.0.10-fat.jar
+          java -jar /usr/local/bin/baksmali.jar --version
+
+      - name: 拉样本 + sha256 全量校验（双样本+番茄基线）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work && cd work
+          echo "== 参数: VER=$VER CRACK=$CRACK INNER=$INNER TAG=$TAG ENGINE=$ENGINE (run $GITHUB_RUN_ID @ $GITHUB_REF_NAME)"
+          gh release download samples -R "$GITHUB_REPOSITORY" -p "$CRACK" -p "$INNER" -D .
+          # 番茄样本公网直链（仓 PUBLIC，HG-1 同款基线）
+          mkdir -p fanqie
+          curl -sSL -o fanqie/fanqie-73368-mod-218M.apk https://github.com/callacat/fanqie-adfree-builder/releases/download/samples/fanqie-73368-mod-218M.apk
+          echo "$CRACK_SHA  $CRACK" | sha256sum -c -
+          echo "$INNER_SHA  $INNER" | sha256sum -c -
+          echo "fdf7e7c1b56a0f3409bf4bf3d1a9c7c252f43d951de0debdbccbb8ff798a3024  fanqie/fanqie-73368-mod-218M.apk" | sha256sum -c -
+          df -h .
+
+      - name: 解包 dex（外层 unzip -o——zip bomb 拒读实锤；内层/番茄 python zipfile）
+        run: |
+          cd work
+          mkdir -p hg-mod hg-inner fanqie/fq-mod
+          unzip -o -q "$CRACK" 'classes*.dex' -d hg-mod || true
+          NM=$(ls hg-mod/classes*.dex 2>/dev/null | wc -l)
+          echo "外层解出 dex 数=$NM"
+          [ "$NM" -ge 20 ] || { echo '!! 外层 dex 抽取异常'; ls -la hg-mod; exit 1; }
+          python3 - <<'EOF'
+          import zipfile, os
+          def dump(apk, out):
+              z = zipfile.ZipFile(apk)
+              dexs = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+              for n in dexs:
+                  open(os.path.join(out, n), 'wb').write(z.read(n))
+              return sorted(dexs)
+          print('hg-inner:', dump(os.environ['INNER'], 'hg-inner'))
+          print('fanqie-mod:', dump('fanqie/fanqie-73368-mod-218M.apk', 'fanqie/fq-mod'))
+          EOF
+          echo "hg-mod: $(ls hg-mod/classes*.dex | wc -l) ｜ hg-inner: $(ls hg-inner/classes*.dex | wc -l) ｜ fq: $(ls fanqie/fq-mod/classes*.dex | wc -l)"
+
+      - name: baksmali 外层+内层全量反编译
+        run: |
+          cd work
+          for D in hg-mod/classes*.dex; do
+            N=$(basename "$D" .dex)
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$D" -o "smali-hg-mod/$N"
+          done
+          for D in hg-inner/classes*.dex; do
+            N=$(basename "$D" .dex)
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$D" -o "smali-hg-inner/$N"
+          done
+          echo "hg-mod smali 文件数: $(find smali-hg-mod -name '*.smali' | wc -l)"
+          echo "hg-inner smali 文件数: $(find smali-hg-inner -name '*.smali' | wc -l)"
+
+      - name: 审计五件套（diff + 画像 + 端点 + C 家族复扫 + dex 归属）
+        run: |
+          cd work
+          python3 ../scripts/hg1_diff.py "$PWD" | tee diff-run.log
+          python3 ../scripts/hg1_profile_diff.py "$PWD" ../docs/profile-16a-truly-added.txt | tee profile-run.log
+          python3 ../scripts/hg1_endpoints.py "$PWD" | tee ep-run.log
+          python3 ../scripts/hg3_scan_c.py "$PWD" | tee scan-c-run.log
+          python3 ../scripts/hg3_dex_attribution.py "$PWD" | tee dexattr-run.log
+          cd diff-out/docs && tar czf "$GITHUB_WORKSPACE/work/$TAG-diff-baksmali.tar.gz" "$TAG-diff-baksmali/" && cd "$GITHUB_WORKSPACE/work"
+          du -h diff-out/docs/* | sort -rh | head -8
+
+      - name: 机器判据汇总（run 日志直读行）
+        run: grep -hE '^HG[0-9]+-' work/diff-run.log work/profile-run.log work/ep-run.log work/scan-c-run.log work/dexattr-run.log || true
+
+      - name: 回写报告到运行分支 docs/
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          BR="${{ github.ref_name }}"
+          cp "work/diff-out/docs/$TAG-diff-report.md" "docs/$TAG-diff-report-$ENGINE.md"
+          cp "work/diff-out/docs/$TAG-endpoints.md" "docs/$TAG-endpoints-$ENGINE.md"
+          ( echo "# $TAG baksmali 全文归档索引（$VER，engine=$ENGINE；正文见 Release $TAG-artifacts-$ENGINE 的 $TAG-diff-baksmali.tar.gz）"; echo
+            echo "- added 文件数: $(find work/diff-out/docs/$TAG-diff-baksmali/added -type f | wc -l)"; echo
+            echo "- changed 文件数: $(find work/diff-out/docs/$TAG-diff-baksmali/changed -type f | wc -l)"; echo
+            echo "- removed 文件数: $(find work/diff-out/docs/$TAG-diff-baksmali/removed -type f | wc -l)"; echo
+            echo "- tar.gz 大小: $(du -h work/$TAG-diff-baksmali.tar.gz | cut -f1)"; echo
+            echo "## 差异方法最多的前 50 类（从报告 §3 表格截取）"; echo '```'
+            awk '/^\| 类 \| \+新增/{f=1;next} f&&/^\|/{n++;if(n>50)exit} f&&!/^\|/{exit} f{print}' "docs/$TAG-diff-report-$ENGINE.md"
+            echo '```' ) > "docs/$TAG-diff-baksmali-INDEX-$ENGINE.md"
+          git config user.name "codery-ci"
+          git config user.email "codery-ci@noreply"
+          git add "docs/$TAG-diff-report-$ENGINE.md" "docs/$TAG-endpoints-$ENGINE.md" "docs/$TAG-diff-baksmali-INDEX-$ENGINE.md"
+          git commit -m "docs($TAG): $VER 审计 CI 产物（engine=$ENGINE, run $GITHUB_RUN_ID）——dex diff+画像+端点+C复扫+dex归属" || echo "无变更"
+          git pull --rebase origin "$BR" && git push origin "HEAD:$BR"
+
+      - name: 上传 baksmali 归档到 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          gh release create "$TAG-artifacts-$ENGINE" --title "$TAG baksmali 全文归档（$VER, $ENGINE）" --notes "外层 diff 差异方法全文（added/changed/removed 三目录）。不进 git，仅本仓 Release 留存。run $GITHUB_RUN_ID" 2>/dev/null || true
+          gh release upload "$TAG-artifacts-$ENGINE" "work/$TAG-diff-baksmali.tar.gz" --clobber
+
+      - name: 清理版权物
+        if: always()
+        run: rm -rf work

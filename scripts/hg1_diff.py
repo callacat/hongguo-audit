@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-# HG-1：红果外层 23dex vs 内嵌官方原包 21dex 全量 diff（baksmali 后按类名对齐）
+# HG 线通用：红果外层 dex vs 内嵌官方原包全量 diff（baksmali 后按类名对齐）
+# HG-3a 参数化：输出文件名/报告标题由环境变量驱动 —— HG_TAG（默认 hg1）、HG_VER（默认 v7.3.6.32），
+#   不设时与 HG-1 历史行为逐字节一致（旧 workflow 零改动可复跑）。
 # 继承番茄 round16a 两轮修正方法论：①调试指令剥离（.line/.prologue/.local/.source，保留 .catch）
 # ②类名对齐排除 dex 挪位噪声（红果外层=官方 dex 重打包+patch，类必然跨 dex 挪动）
 # 输入：work/smali-hg-mod/ 与 work/smali-hg-inner/（每 dex 一个子目录）
-# 输出：work/diff-out/docs/hg1-diff-report.md + hg1-diff-baksmali/(added|changed|removed)/
+# 输出：work/diff-out/docs/{TAG}-diff-report.md + {TAG}-diff-baksmali/(added|changed|removed)/
 #      work/added-classes.txt（真新增类名清单，画像重合输入）
 import os, re, sys, shutil, hashlib
 
 work = sys.argv[1]
+TAG = os.environ.get('HG_TAG', 'hg1')
+VER = os.environ.get('HG_VER', 'v7.3.6.32')
 MOD = os.path.join(work, 'smali-hg-mod')
 INN = os.path.join(work, 'smali-hg-inner')
 OUTD = os.path.join(work, 'diff-out', 'docs')
-BAK = os.path.join(OUTD, 'hg1-diff-baksmali')
+BAK = os.path.join(OUTD, f'{TAG}-diff-baksmali')
 os.makedirs(BAK, exist_ok=True)
 for s in ('added', 'changed', 'removed'):
     os.makedirs(os.path.join(BAK, s), exist_ok=True)
@@ -117,14 +121,16 @@ with open(os.path.join(work, 'added-classes.txt'), 'w', encoding='utf-8') as f:
 with open(os.path.join(work, 'changed-classes.txt'), 'w', encoding='utf-8') as f:
     f.write('\n'.join(changed_cls) + '\n')
 
-report = ['# HG-1 红果外层 dex 全量 diff 报告（外层 23 dex vs 内嵌官方原包 21 dex）', '',
+ndex_mod = len([d for d in os.listdir(MOD) if os.path.isdir(os.path.join(MOD, d))])
+ndex_inner = len([d for d in os.listdir(INN) if os.path.isdir(os.path.join(INN, d))])
+report = [f'# {TAG.upper()} 红果 {VER} 外层 dex 全量 diff 报告（外层 {ndex_mod} dex vs 内嵌官方原包 {ndex_inner} dex）', '',
           '> 方法=类名对齐+调试指令剥离（继承番茄 round16a 两轮修正）。分类权在老马：',
           '> A=壳代码(番茄画像重合) / B=去广告会员patch / C=可疑新增(番茄壳中不存在) / D=VIP伪造保留', '',
           '## 1. 总览', '',
           f'- 外层类总数: {len(mod_keys)} ｜ 内层官方类总数: {len(inn_keys)}',
-          f'- **真新增类: {len(added)}**（全文见 hg1-diff-baksmali/added/）',
-          f'- **真删除类: {len(removed)}**（全文见 hg1-diff-baksmali/removed/）',
-          f'- **修改类: {len(changed_cls)}**（差异方法全文见 hg1-diff-baksmali/changed/，[MOD-ADDED]/[MOD-CHANGED vs INNER-ORIGINAL]/[INNER-REMOVED-IN-MOD] 三段标注）',
+          f'- **真新增类: {len(added)}**（全文见 {TAG}-diff-baksmali/added/）',
+          f'- **真删除类: {len(removed)}**（全文见 {TAG}-diff-baksmali/removed/）',
+          f'- **修改类: {len(changed_cls)}**（差异方法全文见 {TAG}-diff-baksmali/changed/，[MOD-ADDED]/[MOD-CHANGED vs INNER-ORIGINAL]/[INNER-REMOVED-IN-MOD] 三段标注）',
           f'- 修改类中差异方法: 新增 {total_a} / 删除 {total_r} / 修改 {total_c}', '',
           f'- 跨 dex 重复类名（mod）: {len(mod_conflict)} ｜（inner）: {len(inn_conflict)}（应为 0，非 0 需在报告红旗解释）', '',
           '## 2. 真新增类清单（按包前缀分组）', '']
@@ -152,10 +158,10 @@ else:
 report += ['', '## 5. dex 挪位对照（重打包证据，无语义）', '',
            f'- 同名类在 mod/inner 都出现且来源 dex 不同的数量（挪位规模，信息项）: 类名对齐总数 {len(mod_keys & inn_keys)}', '',
            '## 6. 归档结构', '',
-           '```', 'hg1-diff-baksmali/', '├── added/    真新增类 baksmali 全文', '├── changed/  修改类差异方法全文（三段标注）', '└── removed/  删除类 inner 全文', '```', '']
-with open(os.path.join(OUTD, 'hg1-diff-report.md'), 'w', encoding='utf-8') as f:
+           '```', f'{TAG}-diff-baksmali/', '├── added/    真新增类 baksmali 全文', '├── changed/  修改类差异方法全文（三段标注）', '└── removed/  删除类 inner 全文', '```', '']
+with open(os.path.join(OUTD, f'{TAG}-diff-report.md'), 'w', encoding='utf-8') as f:
     f.write('\n'.join(report))
 
-print(f'HG1-DIFF added={len(added)} removed={len(removed)} changed={len(changed_cls)} (+{total_a}/-{total_r}/~{total_c})')
-print(f'HG1-DIFF mod_cls={len(mod_keys)} inner_cls={len(inn_keys)} conflict_mod={len(mod_conflict)} conflict_inner={len(inn_conflict)}')
+print(f'HG{TAG[2:] if TAG.startswith("hg") else TAG.upper()}-DIFF added={len(added)} removed={len(removed)} changed={len(changed_cls)} (+{total_a}/-{total_r}/~{total_c})')
+print(f'HG{TAG[2:] if TAG.startswith("hg") else TAG.upper()}-DIFF mod_cls={len(mod_keys)} inner_cls={len(inn_keys)} conflict_mod={len(mod_conflict)} conflict_inner={len(inn_conflict)} dex_mod={ndex_mod} dex_inner={ndex_inner}')
 print(f'baksmali 归档文件数: {sum(len(fs) for _,_,fs in os.walk(BAK))}')

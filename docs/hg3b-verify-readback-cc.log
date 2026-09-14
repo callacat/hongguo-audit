@@ -1,0 +1,5 @@
+HG3B_VERIFY_FAMILY com/b/a$Android_id.smali
+HG3B_VERIFY_FAMILY com/b/a$Reflect.smali
+HG3B_VERIFY_FAMILY com/b/a.smali
+HG3B_VERIFY mute_found=1 mute_oncreate_ref=0 mute_oncreate_body=42 ext_invoke=0 family_src=3 family_prod=3
+HG3B_VERIFY_OK gates=[mute_nop_landed=1, ext_invoke=0, family_identity=3/3]
