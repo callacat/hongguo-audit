@@ -155,7 +155,7 @@ jobs:
           du -h hg1-added-files.txt analysis/hg1-incremental.txt
 
           tar -czf hg3-analysis.tar.gz -C analysis .
-          du -h hg3-analysis.tar.gz analysis/* | sort -rh | head -12
+          du -h hg3-analysis.tar.gz analysis/* | sort -rh | head -12 || true
 
       - name: Upload analysis artifacts
         if: always()
