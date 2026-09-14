@@ -130,9 +130,6 @@ jobs:
               print(f'{dex}: unique_classes={len(unique)} added={len(unique & added)} changed={len(unique & changed)} rearranged_official={len(unique - added - changed)}')
           print(f'mod_unique={len(total)} added={len(added)} changed={len(changed)}')
           PY
-          tar -czf analysis/hg3-analysis.tar.gz -C analysis .
-          du -h analysis/* | sort -rh | head -12
-
       - name: Download HG-1 baseline added-class index
         env:
           GH_TOKEN: ${{ github.token }}
@@ -156,6 +153,9 @@ jobs:
               print(key)
           PY
           du -h hg1-added-files.txt analysis/hg1-incremental.txt
+
+          tar -czf analysis/hg3-analysis.tar.gz --exclude='analysis/hg3-analysis.tar.gz' -C analysis .
+          du -h analysis/hg3-analysis.tar.gz analysis/* | sort -rh | head -12
 
       - name: Upload analysis artifacts
         if: always()
