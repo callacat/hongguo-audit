@@ -52,3 +52,9 @@
 - All build gates passed and Release `hg3b-codex-r1` was created.
 - Asset: `hongguo-v7.3.7.32-clean-r1-codex.apk`; size `277643531`; SHA-256 `03e07aa4940e1afcc3b146a5079ac0eb47fc60c6718f153d09ae699f87913ea6`.
 - Failure was only evidence copy: apktool renamed the diff target to `MuteApplication_original.diff`; switched to reading any `*.diff` in the point-diff directory.
+
+## Run 34900211353
+
+- All build gates passed; Release `hg3b-codex-r4` created.
+- Asset: `hongguo-v7.3.7.32-clean-r4-codex.apk`; size `277643531`; SHA-256 `033f89e00ef0c211ac82ac5b6cd53db5f98a6aa1edec1b3c5d585986d1b929d1`.
+- Failure was evidence copy path: `hg3b-point-diff` is under `work/`; corrected.

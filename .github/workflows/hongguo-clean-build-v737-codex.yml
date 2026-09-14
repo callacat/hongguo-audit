@@ -182,7 +182,7 @@ jobs:
           cp work/hg3b-reparse-gate.txt docs/hg3b/reparse-gate.txt
           cp work/sha256-hg3b.txt docs/hg3b/sha256.txt
           cp work/release-summary.txt docs/hg3b/release-summary.txt
-          cp "$(find hg3b-point-diff -type f -name '*.diff' | head -1)" docs/hg3b/point-diff.diff
+          cp "$(find work/hg3b-point-diff -type f -name '*.diff' | head -1)" docs/hg3b/point-diff.diff
           git add scripts/hg3b_patch_entry.py docs/hg3b docs/hg3b-codex-context.md
           git config user.name codery-ci
           git config user.email codery-ci@noreply
