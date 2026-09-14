@@ -37,10 +37,10 @@ jobs:
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ github.token }}
-      OUTER_ASSET: ${{ inputs.outer_asset }}
-      OUTER_SHA256: ${{ inputs.outer_sha256 }}
-      INNER_ASSET: ${{ inputs.inner_asset }}
-      INNER_SHA256: ${{ inputs.inner_sha256 }}
+      OUTER_ASSET: ${{ inputs.outer_asset || 'hongguo-v7.3.7.32-crack.apk' }}
+      OUTER_SHA256: ${{ inputs.outer_sha256 || '337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e' }}
+      INNER_ASSET: ${{ inputs.inner_asset || 'hongguo-73732-inner-official.apk' }}
+      INNER_SHA256: ${{ inputs.inner_sha256 || 'a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -14,3 +14,8 @@
 ## Trigger fix
 
 - Added push trigger limited to this workflow path; first push only indexed `workflow_dispatch` and did not start a run.
+
+## Run 34897088857
+
+- Failure: push event did not populate dispatch inputs; workflow env defaults were absent, so sample download found no assets.
+- Fix: restore v737 default asset names and SHA-256 values when inputs are empty.
