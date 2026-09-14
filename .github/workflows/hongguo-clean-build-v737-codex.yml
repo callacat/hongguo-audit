@@ -1,0 +1,187 @@
+name: hongguo-clean-build-v737-codex
+
+on:
+  workflow_dispatch:
+    inputs:
+      outer_asset:
+        description: v7.3.7.32 outer crack APK asset
+        default: hongguo-v7.3.7.32-crack.apk
+        required: true
+        type: string
+      outer_sha256:
+        description: v7.3.7.32 outer APK SHA-256
+        default: 337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e
+        required: true
+        type: string
+      inner_asset:
+        description: v7.3.7.32 inner official APK asset
+        default: hongguo-73732-inner-official.apk
+        required: true
+        type: string
+      inner_sha256:
+        description: v7.3.7.32 inner official APK SHA-256
+        default: a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OUTER_ASSET: ${{ inputs.outer_asset }}
+      OUTER_SHA256: ${{ inputs.outer_sha256 }}
+      INNER_ASSET: ${{ inputs.inner_asset }}
+      INNER_SHA256: ${{ inputs.inner_sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-30" "build-tools;35.0.0" > /dev/null
+          echo "BT=$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: Download apktool
+        run: |
+          curl -sSL --retry 3 --retry-delay 5 -o /usr/local/bin/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar
+          java -jar /usr/local/bin/apktool.jar --version
+
+      - name: Download and verify samples
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          cd work
+          gh release download samples -R "$GITHUB_REPOSITORY" -p "$OUTER_ASSET" -p "$INNER_ASSET" -D .
+          echo "$OUTER_SHA256  $OUTER_ASSET" | sha256sum -c -
+          echo "$INNER_SHA256  $INNER_ASSET" | sha256sum -c -
+
+      - name: Decode outer APK
+        run: |
+          set -euo pipefail
+          cd work
+          java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o mod_src "$OUTER_ASSET"
+          actual="$(sha256sum mod_src/assets/base.apk | cut -d' ' -f1)"
+          echo "HG3B_GATE1 inner_base_sha256=$actual"
+          printf '%s\n' "$actual" > hg3b-inner-sha.txt
+          test "$actual" = "$INNER_SHA256"
+          [ "$(find mod_src -type f -name '*.smali' | wc -l)" -gt 0 ]
+
+      - name: Patch single C-family entry point
+        run: |
+          set -euo pipefail
+          cd work
+          python3 ../scripts/hg3b_patch_entry.py mod_src hg3b-point-diff | tee patch-hg3b.log
+          grep -q 'HG3B_PATCH_DONE' patch-hg3b.log
+          sed -i 's|<public type="invalid[0-9]*" |<public type="ignore_me" |g' mod_src/res/values/public.xml 2>/dev/null || true
+          sed -i '/type="ignore_me"/d' mod_src/res/values/public.xml 2>/dev/null || true
+          rm -rf mod_src/res/invalid*
+
+      - name: Verify patch and family retention
+        run: |
+          set -euo pipefail
+          cd work
+          test -f mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali
+          test -f mod_src/smali_classes14/com/b/a.smali
+          test -f mod_src/smali_classes14/com/b/a\$Android_id.smali
+          [ "$(grep -c 'HG3B-NOP-C' mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali)" = 1 ]
+          [ "$(grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG3B-NOP-C' | grep -v '/com/b/' | wc -l)" = 0 ]
+          [ "$(find mod_src/smali*/com/b -name 'a*.smali' | wc -l)" = 3 ]
+          grep -n 'HG3B-NOP-C' mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali | tee hg3b-entry.diff-summary.txt
+
+      - name: Build, align, and sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd work
+          java -Xmx8g -jar /usr/local/bin/apktool.jar b -f mod_src -o clean-unsigned.apk
+          "$BT/zipalign" -f -p 16 clean-unsigned.apk clean-aligned.apk
+          echo "$KEYSTORE_BASE64" | base64 -d > codery.keystore
+          "$BT/apksigner" sign --ks codery.keystore --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out signed.apk clean-aligned.apk
+          "$BT/apksigner" verify --verbose --print-certs signed.apk | tee verify-hg3b.txt
+          sha256sum signed.apk | tee sha256-hg3b.txt
+
+      - name: Verify signed APK gates
+        run: |
+          set -euo pipefail
+          cd work
+          python3 - <<'PY' | tee hg3b-signed-gate.txt
+          import hashlib, os, zipfile
+          z = zipfile.ZipFile('signed.apk')
+          actual = hashlib.sha256(z.read('assets/base.apk')).hexdigest()
+          print(f'HG3B_GATE2 signed_inner_base_sha256={actual}')
+          assert actual == os.environ['INNER_SHA256'], 'inner base.apk changed'
+          dex_names = [n for n in z.namelist() if n.startswith('classes') and n.endswith('.dex')]
+          print(f'HG3B_GATE2 dex_count={len(dex_names)}')
+          assert len(dex_names) == 24, 'outer dex count changed'
+          print('HG3B_GATE2 PASS')
+          PY
+
+      - name: Reparse signed APK and verify NOP with no external references
+        run: |
+          set -euo pipefail
+          cd work
+          rm -rf verify_src
+          java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o verify_src signed.apk
+          python3 - <<'PY' | tee hg3b-reparse-gate.txt
+          from pathlib import Path
+          entry = Path('verify_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali')
+          body = entry.read_text(encoding='utf-8', errors='replace')
+          assert 'HG3B-NOP-C' in body
+          assert 'Lcom/b/a;->init()V' not in body
+          refs = [str(path) for path in Path('verify_src').glob('smali*/**/*.smali') if 'Lcom/b/a;->' in path.read_text(encoding='utf-8', errors='replace') and '/com/b/' not in str(path)]
+          print(f'HG3B_GATE3 entry_nop=1 external_com_b_refs={len(refs)}')
+          for ref in refs:
+              print(f'HG3B_GATE3_EXTERNAL_REF {ref}')
+          assert len(refs) == 0, 'external com/b/a reference remains'
+          family = [str(path) for path in Path('verify_src').glob('smali*/com/b/a*.smali')]
+          print(f'HG3B_GATE3 family_files={len(family)}')
+          assert len(family) == 3, 'family files changed'
+          print('HG3B_GATE3 PASS')
+          PY
+
+      - name: Calculate release round and publish
+        run: |
+          set -euo pipefail
+          LAST=$(gh release list -R "$GITHUB_REPOSITORY" | grep -oE 'hg3b-codex-r[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1 || true)
+          N=$(( ${LAST:-0} + 1 ))
+          OUT="hongguo-v7.3.7.32-clean-r${N}-codex.apk"
+          cp work/signed.apk "work/$OUT"
+          SIZE=$(stat -c %s "work/$OUT")
+          SHA=$(cut -d' ' -f1 work/sha256-hg3b.txt)
+          gh release create "hg3b-codex-r${N}" --title "HG-3b clean build round ${N}" --notes "C-family entry NOP; A/B/D preserved; inner base.apk unchanged; codery keystore v1v2v3. run ${GITHUB_RUN_ID}" "work/$OUT" work/patch-hg3b.log work/verify-hg3b.txt work/hg3b-signed-gate.txt work/hg3b-reparse-gate.txt work/sha256-hg3b.txt
+          printf 'HG3B_RUN_ID=%s\nHG3B_ASSET=%s\nHG3B_SIZE=%s\nHG3B_SHA256=%s\n' "$GITHUB_RUN_ID" "$OUT" "$SIZE" "$SHA" | tee work/release-summary.txt
+          mkdir -p docs/hg3b
+          cp work/patch-hg3b.log docs/hg3b/patch.log
+          cp work/verify-hg3b.txt docs/hg3b/verify.txt
+          cp work/hg3b-signed-gate.txt docs/hg3b/signed-gate.txt
+          cp work/hg3b-reparse-gate.txt docs/hg3b/reparse-gate.txt
+          cp work/sha256-hg3b.txt docs/hg3b/sha256.txt
+          cp work/release-summary.txt docs/hg3b/release-summary.txt
+          cp hg3b-point-diff/MuteApplication.diff docs/hg3b/point-diff.diff
+          git add scripts/hg3b_patch_entry.py docs/hg3b docs/hg3b-codex-context.md
+          git config user.name codery-ci
+          git config user.email codery-ci@noreply
+          git commit -m "docs(HG-3b): clean build round ${N} evidence" || echo "no changes"
+          git push origin hg3-codex
+
+      - name: Clean copyrighted material
+        if: always()
+        run: rm -rf work
