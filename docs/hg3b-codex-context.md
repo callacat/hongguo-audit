@@ -30,3 +30,9 @@
 - Patch succeeded at `smali_classes14/com/tencent/tinker/loader/MuteApplication.smali` line 1129 (`HG3B_PATCH_DONE files=1 invokes=1`).
 - Failure: family retention checks mistakenly looked under `classes14`; audit lists `com/b/a`, `com/b/a$Android_id`, and `com/b/a$Reflect` under `classes23`.
 - Fix: moved family retention checks to `smali_classes23`.
+
+## Run 34898121625
+
+- Passed: build, zipalign, apksigner v1/v2/v3, signed inner base.apk SHA-256 gate, and dex count 24.
+- Failure: reparsing did not preserve the smali comment marker, so the gate could not observe the NOP.
+- Fix: emit an explicit `nop-void` and assert exactly one NOP within `onCreate()V` after reparse.

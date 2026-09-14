@@ -127,7 +127,7 @@ jobs:
           set -euo pipefail
           cd work
           python3 - <<'PY' | tee hg3b-signed-gate.txt
-          import hashlib, os, zipfile
+          import hashlib, os, re, zipfile
           z = zipfile.ZipFile('signed.apk')
           actual = hashlib.sha256(z.read('assets/base.apk')).hexdigest()
           print(f'HG3B_GATE2 signed_inner_base_sha256={actual}')
@@ -148,8 +148,10 @@ jobs:
           from pathlib import Path
           entry = Path('verify_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali')
           body = entry.read_text(encoding='utf-8', errors='replace')
-          assert 'HG3B-NOP-C' in body
-          assert 'Lcom/b/a;->init()V' not in body
+          methods = re.findall(r'^\.method\s+.*onCreate\(\)V.*?^\.end method', body, flags=re.M | re.S)
+          assert len(methods) == 1, 'onCreate()V method not uniquely found'
+          assert 'Lcom/b/a;->init()V' not in methods[0], 'entry init invocation remains'
+          assert methods[0].count('nop-void') == 1, 'onCreate()V does not contain exactly one NOP'
           refs = [str(path) for path in Path('verify_src').glob('smali*/**/*.smali') if 'Lcom/b/a;->' in path.read_text(encoding='utf-8', errors='replace') and '/com/b/' not in str(path)]
           print(f'HG3B_GATE3 entry_nop=1 external_com_b_refs={len(refs)}')
           for ref in refs:

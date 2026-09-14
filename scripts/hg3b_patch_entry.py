@@ -17,7 +17,7 @@ hits = []
 for index, line in enumerate(lines):
     if line.strip() == target:
         indent = line[:len(line) - len(line.lstrip())]
-        lines[index] = f'{indent}# HG3B-NOP-C: 断 invoke-static {{}} Lcom/b/a;->init()V（C 类设备指纹链入口）'
+        lines[index] = f'{indent}# HG3B-NOP-C: 断 invoke-static {{}} Lcom/b/a;->init()V（C 类设备指纹链入口）\n{indent}nop-void'
         hits.append(index + 1)
         break
 
