@@ -41,3 +41,8 @@
 
 - Build rejected `nop-void` smali syntax (`mismatched input`).
 - Fix: use smali `nop` opcode instead.
+
+## Run 34899099802
+
+- Build and signature gates passed; reparse failed because the NOP gate did not import `re`.
+- Fix: import `re` in the reparsing gate.

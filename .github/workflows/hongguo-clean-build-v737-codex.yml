@@ -145,6 +145,7 @@ jobs:
           rm -rf verify_src
           java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o verify_src signed.apk
           python3 - <<'PY' | tee hg3b-reparse-gate.txt
+          import re
           from pathlib import Path
           entry = Path('verify_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali')
           body = entry.read_text(encoding='utf-8', errors='replace')
