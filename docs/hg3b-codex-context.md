@@ -46,3 +46,9 @@
 
 - Build and signature gates passed; reparse failed because the NOP gate did not import `re`.
 - Fix: import `re` in the reparsing gate.
+
+## Run 34899654207
+
+- All build gates passed and Release `hg3b-codex-r1` was created.
+- Asset: `hongguo-v7.3.7.32-clean-r1-codex.apk`; size `277643531`; SHA-256 `03e07aa4940e1afcc3b146a5079ac0eb47fc60c6718f153d09ae699f87913ea6`.
+- Failure was only evidence copy: apktool renamed the diff target to `MuteApplication_original.diff`; switched to reading any `*.diff` in the point-diff directory.
