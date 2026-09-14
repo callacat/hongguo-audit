@@ -17,3 +17,9 @@
 ## Next step
 
 Implement and commit the isolated workflow plus script parameterization, then dispatch CI.
+
+## Completion
+
+- Branch HEAD: `f2f0a4ebab3fae316bfd4ab94c0c86aab79fff72`.
+- CI run: `34888317725`.
+- Report path: `docs/hg3-diff-report-codex.md`.
