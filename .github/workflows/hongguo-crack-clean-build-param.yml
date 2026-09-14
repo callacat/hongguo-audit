@@ -206,8 +206,7 @@ jobs:
           SIZE=$(stat -c %s "work/$OUT")
           SHA=$(cut -d' ' -f1 work/sha256-hg3b.txt)
           gh release create "${TAG}-round${N}-${ENGINE}" --title "HG-3b 净化重打包 ${VER} round ${N}（${ENGINE}）" \
-            --notes "C 类唯一点位断链（MuteApplication.onCreate init-NOP）；A/B/D 全保留；内层 base.apk 字节级不变（三门硬验：sha 恒等+产物回读 NOP 落位+家族 3 类恒等）；codery keystore v1v2v3。run ${GITHUB_RUN_NUMBER} / ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-产物: $OUT size=$SIZE sha256=$SHA" \
+            --notes "C 类唯一点位断链（MuteApplication.onCreate init-NOP）；A/B/D 全保留；内层 base.apk 字节级不变（三门硬验：sha 恒等+产物回读 NOP 落位+家族 3 类恒等）；codery keystore v1v2v3。产物 $OUT size=$SIZE sha256=$SHA run ${GITHUB_RUN_NUMBER} / ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             "work/$OUT" work/patch-hg3b.log work/verify-hg3b.txt work/verify-readback-hg3b.log work/sha256-hg3b.txt work/hg3b-point-diff/MuteApplication.onCreate.diff
           cp work/patch-hg3b.log "docs/${TAG}-patch-${ENGINE}.log"
           cp work/verify-hg3b.txt "docs/${TAG}-verify-${ENGINE}.txt"
