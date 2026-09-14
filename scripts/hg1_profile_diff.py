@@ -7,6 +7,7 @@ from collections import defaultdict
 
 work = sys.argv[1]
 profile_file = sys.argv[2] if len(sys.argv) > 2 else 'docs/profile-16a-truly-added.txt'
+report_path = sys.argv[3] if len(sys.argv) > 3 else os.path.join(work, 'diff-out', 'docs', 'hg1-diff-report.md')
 
 def load(p):
     s = set()
@@ -78,7 +79,7 @@ out.append('')
 out.append(f'> 画像独有（番茄有红果无，信息项）: {len(fp_n - hg_n)} 主类')
 out.append('')
 
-with open(os.path.join(work, 'diff-out', 'docs', 'hg1-diff-report.md'), 'a', encoding='utf-8') as f:
+with open(report_path, 'a', encoding='utf-8') as f:
     f.write('\n'.join(out))
 
 with open(os.path.join(work, 'overlap-classes.txt'), 'w', encoding='utf-8') as f:

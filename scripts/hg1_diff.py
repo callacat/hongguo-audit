@@ -8,9 +8,10 @@
 import os, re, sys, shutil, hashlib
 
 work = sys.argv[1]
+report_path = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.join(work, 'diff-out', 'docs', 'hg1-diff-report.md')
 MOD = os.path.join(work, 'smali-hg-mod')
 INN = os.path.join(work, 'smali-hg-inner')
-OUTD = os.path.join(work, 'diff-out', 'docs')
+OUTD = os.path.dirname(report_path)
 BAK = os.path.join(OUTD, 'hg1-diff-baksmali')
 os.makedirs(BAK, exist_ok=True)
 for s in ('added', 'changed', 'removed'):
@@ -117,7 +118,7 @@ with open(os.path.join(work, 'added-classes.txt'), 'w', encoding='utf-8') as f:
 with open(os.path.join(work, 'changed-classes.txt'), 'w', encoding='utf-8') as f:
     f.write('\n'.join(changed_cls) + '\n')
 
-report = ['# HG-1 红果外层 dex 全量 diff 报告（外层 23 dex vs 内嵌官方原包 21 dex）', '',
+report = [f'# HG-{sys.argv[3] if len(sys.argv) > 3 else "1"} 红果外层 dex 全量 diff 报告', '',
           '> 方法=类名对齐+调试指令剥离（继承番茄 round16a 两轮修正）。分类权在老马：',
           '> A=壳代码(番茄画像重合) / B=去广告会员patch / C=可疑新增(番茄壳中不存在) / D=VIP伪造保留', '',
           '## 1. 总览', '',
@@ -153,7 +154,7 @@ report += ['', '## 5. dex 挪位对照（重打包证据，无语义）', '',
            f'- 同名类在 mod/inner 都出现且来源 dex 不同的数量（挪位规模，信息项）: 类名对齐总数 {len(mod_keys & inn_keys)}', '',
            '## 6. 归档结构', '',
            '```', 'hg1-diff-baksmali/', '├── added/    真新增类 baksmali 全文', '├── changed/  修改类差异方法全文（三段标注）', '└── removed/  删除类 inner 全文', '```', '']
-with open(os.path.join(OUTD, 'hg1-diff-report.md'), 'w', encoding='utf-8') as f:
+with open(report_path, 'w', encoding='utf-8') as f:
     f.write('\n'.join(report))
 
 print(f'HG1-DIFF added={len(added)} removed={len(removed)} changed={len(changed_cls)} (+{total_a}/-{total_r}/~{total_c})')

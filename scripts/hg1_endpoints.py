@@ -10,6 +10,7 @@ import os, re, sys
 from collections import defaultdict
 
 work = sys.argv[1]
+report_path = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else os.path.join(work, 'diff-out', 'docs', 'hg1-endpoints.md')
 HG_SMALI = os.path.join(work, 'smali-hg-mod')
 HG_ADD = os.path.join(work, 'added-classes.txt')
 HG_OVL = os.path.join(work, 'overlap-classes.txt')
@@ -134,7 +135,7 @@ drift_ips = hg_ips - fq_ips
 drift_doms = hg_doms - fq_doms
 
 L = []
-L.append('# HG-1 外层硬编码网络端点清单')
+L.append(f'# HG-{sys.argv[3] if len(sys.argv) > 3 else "1"} 外层硬编码网络端点清单')
 L.append('')
 L.append('> 方法：baksmali const-string 全量扫描（红果）+ dex 字符串区 regex（番茄壳，同口径正则）。')
 L.append('> 端点集定义：红果端点=真新增类∩画像重合（A 壳）；漂移项=红果壳端点−番茄壳端点。')
@@ -227,7 +228,7 @@ for x, c in top_off:
     L.append(f'- `{x}`（{len(c)} 类）')
 L.append('')
 
-with open(OUT, 'w', encoding='utf-8') as f:
+with open(report_path, 'w', encoding='utf-8') as f:
     f.write('\n'.join(L))
 
 print(f'HG1-EP hgA urls={len(hg_urls)} ips={len(hg_ips)} doms={len(hg_doms)} | fq urls={len(fq_urls)} ips={len(fq_ips)} doms={len(fq_doms)} | drift urls={len(drift_urls)} doms={len(drift_doms)} red={RED}')
