@@ -30,7 +30,8 @@
       INNER_MATCH、dex=24。产物 sha=598d6d28ffe866f9b5acbfa227119e0e5d767e0295cae6537b8db295ed98939f size=277,643,531
 - [x] docs/hg3b-report-cc.md 组装完成（点位 diff/三门输出+本机复核/apksigner 全文/Release 资产清单/run 号）
 - [x] Release **hg3b-round1-cc**（6 资产）；CI 回写 docs/hg3b-{patch,verify,verify-readback,point-diff}-cc.*（提交 70148d7）
-- [ ] 汇报（CLAUDE.md M2 feishu notify；本单无表格 rid 且 /root/.hermes env 无权限 → 走 M2 群报）
+- [x] 汇报：M2 feishu notify 发协作群 @东哥 **code=0**（message_id om_x100b65b1b6f16c68b32eb793b4e0117）。
+      本单无表格 rid 且 /root/.hermes env agent 无权限读 → 群报为唯一可达通道。任务全线收口。
 
 ## 已知坑（沿用 HG-3a 实锤）
 - 外层 zip Overlapped entries：python zipfile 读外层会拒（zip bomb），产物回读步用 unzip -o；内层官方包正常。
