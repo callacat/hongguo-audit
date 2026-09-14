@@ -1,6 +1,10 @@
 name: hongguo-clean-build-v737-codex
 
 on:
+  push:
+    branches: ['hg3-codex']
+    paths:
+      - '.github/workflows/hongguo-clean-build-v737-codex.yml'
   workflow_dispatch:
     inputs:
       outer_asset:
