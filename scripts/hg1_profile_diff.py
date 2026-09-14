@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-# HG-1：红果壳画像 vs 番茄 round16a 已知壳类画像 → 公共类重合率
-# 输入：work/added-classes.txt（hg1_diff 产出的真新增类）+ docs/profile-16a-truly-added.txt（1249 基线，可覆盖）
-# 输出：hg1-diff-report.md 附 §7 重合率；work/overlap-classes.txt / work/hg-only-classes.txt
+# HG 线通用：红果壳画像 vs 番茄 round16a 已知壳类画像 → 公共类重合率
+# HG-3a 参数化：HG_TAG 环境变量驱动输出文件名（默认 hg1=历史行为）。
+# 输入：work/added-classes.txt（diff 脚本产出的真新增类）+ docs/profile-16a-truly-added.txt（1249 基线，可覆盖）
+# 输出：{TAG}-diff-report.md 附 §7 重合率；work/overlap-classes.txt / work/hg-only-classes.txt
 import os, re, sys
 from collections import defaultdict
 
 work = sys.argv[1]
+TAG = os.environ.get('HG_TAG', 'hg1')
 profile_file = sys.argv[2] if len(sys.argv) > 2 else 'docs/profile-16a-truly-added.txt'
 
 def load(p):
@@ -78,7 +80,7 @@ out.append('')
 out.append(f'> 画像独有（番茄有红果无，信息项）: {len(fp_n - hg_n)} 主类')
 out.append('')
 
-with open(os.path.join(work, 'diff-out', 'docs', 'hg1-diff-report.md'), 'a', encoding='utf-8') as f:
+with open(os.path.join(work, 'diff-out', 'docs', f'{TAG}-diff-report.md'), 'a', encoding='utf-8') as f:
     f.write('\n'.join(out))
 
 with open(os.path.join(work, 'overlap-classes.txt'), 'w', encoding='utf-8') as f:
@@ -86,4 +88,4 @@ with open(os.path.join(work, 'overlap-classes.txt'), 'w', encoding='utf-8') as f
 with open(os.path.join(work, 'hg-only-classes.txt'), 'w', encoding='utf-8') as f:
     f.write('\n'.join(sorted(hg_only)) + '\n')
 
-print(f'HG1-PROFILE total={len(hg_n)} overlap={len(common)} rate={rate:.1f}% redflag={RED} hg_only={len(hg_only)} profile_only={len(fp_n - hg_n)}')
+print(f'HG{TAG[2:] if TAG.startswith("hg") else TAG.upper()}-PROFILE total={len(hg_n)} overlap={len(common)} rate={rate:.1f}% redflag={RED} hg_only={len(hg_only)} profile_only={len(fp_n - hg_n)}')
