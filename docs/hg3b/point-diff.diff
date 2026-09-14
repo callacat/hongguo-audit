@@ -1,0 +1,12 @@
+--- a/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali
++++ b/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali
+@@ -1126,7 +1126,8 @@
+ .method public onCreate()V
+     .locals 6
+ 
+-    invoke-static {}, Lcom/b/a;->init()V
++    # HG3B-NOP-C: 断 invoke-static {} Lcom/b/a;->init()V（C 类设备指纹链入口）
++    nop
+ 
+     const-string v0, "Mute.App"
+ 

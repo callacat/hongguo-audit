@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Codery Debug, O=Codery, C=CN
+Signer #1 certificate SHA-256 digest: bebb2cca93e02771751af4050a72a8a37986c3c052632a8aa715421d89ffc061
+Signer #1 certificate SHA-1 digest: 6fcc22082800d12db59af1c2ba1be17ed4ceef88
+Signer #1 certificate MD5 digest: 27920b5a97c79693362baf1de9150557
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 2048
+Signer #1 public key SHA-256 digest: 1881a09a082ca5f0be96d58c42bf051ae800f0e546a510948f911ea860f30d35
+Signer #1 public key SHA-1 digest: 8a4b49d5f6dc25b19a7c7e6d0388987a57db9684
+Signer #1 public key MD5 digest: c015d8f0ebb1661ae2e7eecf3d0faf87

@@ -1,0 +1,3 @@
+HG3B_GATE3 entry_nop=1 external_com_b_refs=0
+HG3B_GATE3 family_files=3
+HG3B_GATE3 PASS

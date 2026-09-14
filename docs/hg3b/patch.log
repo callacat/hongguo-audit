@@ -1,0 +1,2 @@
+HG3B_DIFF smali_classes14/com/tencent/tinker/loader/MuteApplication.smali -> hg3b-point-diff/MuteApplication.diff
+HG3B_PATCH_DONE files=1 invokes=1 lines=[1129]
