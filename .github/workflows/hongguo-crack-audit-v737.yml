@@ -1,0 +1,166 @@
+name: hongguo-crack-audit-v737
+
+# HG-3：红果 v7.3.7.32 双样本全量审计。独立于既有 hongguo-crack-audit HG-1 workflow。
+on:
+  workflow_dispatch:
+    inputs:
+      outer_asset:
+        description: 'v7.3.7.32 outer crack APK asset'
+        default: 'hongguo-v7.3.7.32-crack.apk'
+        required: true
+        type: string
+      outer_sha256:
+        description: 'v7.3.7.32 outer APK SHA-256'
+        default: '337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e'
+        required: true
+        type: string
+      inner_asset:
+        description: 'v7.3.7.32 inner official APK asset'
+        default: 'hongguo-73732-inner-official.apk'
+        required: true
+        type: string
+      inner_sha256:
+        description: 'v7.3.7.32 inner official APK SHA-256'
+        default: 'a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download baksmali
+        run: |
+          curl -sSL --retry 3 --retry-delay 5 -o /usr/local/bin/baksmali.jar https://github.com/baksmali/smali/releases/download/3.0.10/baksmali-3.0.10-fat.jar
+          java -jar /usr/local/bin/baksmali.jar --version
+
+      - name: Download and verify v737 samples
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p work
+          cd work
+          gh release download samples -R "$GITHUB_REPOSITORY" -p "${{ inputs.outer_asset }}" -p "${{ inputs.inner_asset }}" -D .
+          echo "${{ inputs.outer_sha256 }}  ${{ inputs.outer_asset }}" | sha256sum -c -
+          echo "${{ inputs.inner_sha256 }}  ${{ inputs.inner_asset }}" | sha256sum -c -
+          df -h .
+
+      - name: Extract v737 dex files
+        run: |
+          set -euo pipefail
+          cd work
+          unzip -o -j "${{ inputs.outer_asset }}" 'classes*.dex' -d hg-mod || test $? -eq 1
+          unzip -o -j "${{ inputs.inner_asset }}" 'classes*.dex' -d hg-inner
+          outer_count="$(find hg-mod -maxdepth 1 -type f -name 'classes*.dex' | wc -l || true)"
+          inner_count="$(find hg-inner -maxdepth 1 -type f -name 'classes*.dex' | wc -l || true)"
+          echo "outer dex count: $outer_count"
+          echo "inner dex count: $inner_count"
+          test "$outer_count" -gt 0
+          test "$inner_count" -gt 0
+          find hg-mod -maxdepth 1 -type f -name 'classes*.dex' -printf '%f %s bytes\n' | sort > outer-dex-list.txt
+          find hg-inner -maxdepth 1 -type f -name 'classes*.dex' -printf '%f %s bytes\n' | sort > inner-dex-list.txt
+
+      - name: baksmali v737 outer and inner dex
+        run: |
+          set -euo pipefail
+          cd work
+          for dex in hg-mod/classes*.dex; do
+            name="$(basename "$dex" .dex)"
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$dex" -o "smali-hg-mod/$name"
+          done
+          for dex in hg-inner/classes*.dex; do
+            name="$(basename "$dex" .dex)"
+            java -Xmx4g -jar /usr/local/bin/baksmali.jar d "$dex" -o "smali-hg-inner/$name"
+          done
+          find smali-hg-mod -type f -name '*.smali' | wc -l > outer-smali-count.txt || true
+          find smali-hg-inner -type f -name '*.smali' | wc -l > inner-smali-count.txt || true
+          echo "outer smali files: $(cat outer-smali-count.txt)"
+          echo "inner smali files: $(cat inner-smali-count.txt)"
+
+      - name: Full diff, profile overlap, endpoints, and C-family rescan
+        run: |
+          set -euo pipefail
+          cd work
+          mkdir -p analysis
+          python3 ../scripts/hg1_diff.py "$PWD" "$PWD/analysis/diff-report.md" '3' | tee analysis/hg3-diff-run.log
+          python3 ../scripts/hg1_profile_diff.py "$PWD" ../docs/profile-16a-truly-added.txt "$PWD/analysis/diff-report.md" | tee analysis/hg3-profile-run.log
+          python3 ../scripts/hg1_endpoints.py "$PWD" "$PWD/analysis/endpoints.md" '3' | tee analysis/hg3-endpoints-run.log
+          python3 ../scripts/hg3_cba_scan.py "$PWD" "$PWD/analysis/cba-scan.md" | tee analysis/hg3-cba-run.log
+          python3 - <<'PY' | tee analysis/dex-attribution.txt
+          from pathlib import Path
+          work = Path('.')
+          mod = {}
+          for path in sorted(work.glob('smali-hg-mod/classes*/**/*.smali')):
+              key = path.relative_to('smali-hg-mod').with_suffix('').as_posix()
+              dex = path.relative_to('smali-hg-mod').parts[0]
+              mod.setdefault(dex, set()).add(key)
+          total = {key for keys in mod.values() for key in keys}
+          added = {line.strip() for line in Path('added-classes.txt').read_text().splitlines() if line.strip()}
+          changed = {line.strip() for line in Path('changed-classes.txt').read_text().splitlines() if line.strip()}
+          print('HG3-DEX-ATTRIBUTION')
+          for dex in sorted(mod):
+              keys = mod[dex]
+              unique = keys - {key for other, other_keys in mod.items() if other != dex for key in other_keys}
+              print(f'{dex}: unique_classes={len(unique)} added={len(unique & added)} changed={len(unique & changed)} rearranged_official={len(unique - added - changed)}')
+          print(f'mod_unique={len(total)} added={len(added)} changed={len(changed)}')
+          PY
+          tar -czf analysis/hg3-analysis.tar.gz -C analysis .
+          du -h analysis/* | sort -rh | head -12
+
+      - name: Download HG-1 baseline added-class index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd work
+          gh release download hg1-artifacts -R "$GITHUB_REPOSITORY" -p 'hg1-diff-baksmali.tar.gz' -D . --clobber
+          tar -tzf hg1-diff-baksmali.tar.gz | grep '^hg1-diff-baksmali/added/' > hg1-added-files.txt || true
+          python3 - <<'PY' | tee analysis/hg1-incremental.txt
+          from pathlib import Path
+          current = {line.strip() for line in Path('added-classes.txt').read_text().splitlines() if line.strip()}
+          prefix = 'hg1-diff-baksmali/added/'
+          baseline = {line[len(prefix):] for line in Path('hg1-added-files.txt').read_text().splitlines() if line.startswith(prefix)}
+          print('HG3-HG1-INCREMENTAL')
+          print(f'current_added={len(current)} hg1_baseline_added={len(baseline)} intersection={len(current & baseline)} new_vs_hg1={len(current - baseline)} missing_vs_hg1={len(baseline - current)}')
+          print('new_vs_hg1_classes:')
+          for key in sorted(current - baseline):
+              print(key)
+          print('missing_vs_hg1_classes:')
+          for key in sorted(baseline - current):
+              print(key)
+          PY
+          du -h hg1-added-files.txt analysis/hg1-incremental.txt
+
+      - name: Upload analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hg3-codex-analysis-${{ github.run_number }}
+          path: |
+            work/analysis/**
+            work/added-classes.txt
+            work/changed-classes.txt
+            work/overlap-classes.txt
+            work/hg-only-classes.txt
+            work/outer-dex-list.txt
+            work/inner-dex-list.txt
+            work/outer-smali-count.txt
+            work/inner-smali-count.txt
+          if-no-files-found: warn
+          retention-days: 30
