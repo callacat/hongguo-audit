@@ -1,0 +1,1 @@
+HG3B_PATCH_DONE hits=1 extra_outside_table=0 file=smali_classes14/com/tencent/tinker/loader/MuteApplication.smali diff=/home/runner/work/hongguo-audit/hongguo-audit/work/hg3b-point-diff/MuteApplication.onCreate.diff
