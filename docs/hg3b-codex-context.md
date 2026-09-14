@@ -19,3 +19,8 @@
 
 - Failure: push event did not populate dispatch inputs; workflow env defaults were absent, so sample download found no assets.
 - Fix: restore v737 default asset names and SHA-256 values when inputs are empty.
+
+## Run 34897196400
+
+- Gate 1 passed with inner base.apk SHA-256 `a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9`.
+- Failure: patch path mistakenly looked for `smali_classes4`; corrected to the audited `smali_classes14` entry.

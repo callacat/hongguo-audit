@@ -97,13 +97,13 @@ jobs:
         run: |
           set -euo pipefail
           cd work
-          test -f mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali
+          test -f mod_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali
           test -f mod_src/smali_classes14/com/b/a.smali
           test -f mod_src/smali_classes14/com/b/a\$Android_id.smali
-          [ "$(grep -c 'HG3B-NOP-C' mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali)" = 1 ]
+          [ "$(grep -c 'HG3B-NOP-C' mod_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali)" = 1 ]
           [ "$(grep -rn 'invoke-.*Lcom/b/a;->' mod_src/smali*/ | grep -v 'HG3B-NOP-C' | grep -v '/com/b/' | wc -l)" = 0 ]
           [ "$(find mod_src/smali*/com/b -name 'a*.smali' | wc -l)" = 3 ]
-          grep -n 'HG3B-NOP-C' mod_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali | tee hg3b-entry.diff-summary.txt
+          grep -n 'HG3B-NOP-C' mod_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali | tee hg3b-entry.diff-summary.txt
 
       - name: Build, align, and sign
         env:
@@ -146,7 +146,7 @@ jobs:
           java -Xmx4g -jar /usr/local/bin/apktool.jar d -f -r -o verify_src signed.apk
           python3 - <<'PY' | tee hg3b-reparse-gate.txt
           from pathlib import Path
-          entry = Path('verify_src/smali_classes4/com/tencent/tinker/loader/MuteApplication.smali')
+          entry = Path('verify_src/smali_classes14/com/tencent/tinker/loader/MuteApplication.smali')
           body = entry.read_text(encoding='utf-8', errors='replace')
           assert 'HG3B-NOP-C' in body
           assert 'Lcom/b/a;->init()V' not in body

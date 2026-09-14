@@ -5,7 +5,7 @@ import sys
 
 mod_src = Path(sys.argv[1])
 diff_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else mod_src.parent / 'hg3b-point-diff'
-entry = mod_src / 'smali_classes4/com/tencent/tinker/loader/MuteApplication.smali'
+entry = mod_src / 'smali_classes14/com/tencent/tinker/loader/MuteApplication.smali'
 target = 'invoke-static {}, Lcom/b/a;->init()V'
 
 if not entry.is_file():
