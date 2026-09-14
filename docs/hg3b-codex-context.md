@@ -36,3 +36,8 @@
 - Passed: build, zipalign, apksigner v1/v2/v3, signed inner base.apk SHA-256 gate, and dex count 24.
 - Failure: reparsing did not preserve the smali comment marker, so the gate could not observe the NOP.
 - Fix: emit an explicit `nop-void` and assert exactly one NOP within `onCreate()V` after reparse.
+
+## Run 34898868567
+
+- Build rejected `nop-void` smali syntax (`mismatched input`).
+- Fix: use smali `nop` opcode instead.

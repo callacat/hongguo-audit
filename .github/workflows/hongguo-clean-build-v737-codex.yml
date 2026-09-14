@@ -151,7 +151,7 @@ jobs:
           methods = re.findall(r'^\.method\s+.*onCreate\(\)V.*?^\.end method', body, flags=re.M | re.S)
           assert len(methods) == 1, 'onCreate()V method not uniquely found'
           assert 'Lcom/b/a;->init()V' not in methods[0], 'entry init invocation remains'
-          assert methods[0].count('nop-void') == 1, 'onCreate()V does not contain exactly one NOP'
+          assert methods[0].count('nop') == 1, 'onCreate()V does not contain exactly one NOP'
           refs = [str(path) for path in Path('verify_src').glob('smali*/**/*.smali') if 'Lcom/b/a;->' in path.read_text(encoding='utf-8', errors='replace') and '/com/b/' not in str(path)]
           print(f'HG3B_GATE3 entry_nop=1 external_com_b_refs={len(refs)}')
           for ref in refs:
