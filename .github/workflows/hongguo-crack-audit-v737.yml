@@ -2,6 +2,10 @@ name: hongguo-crack-audit-v737
 
 # HG-3：红果 v7.3.7.32 双样本全量审计。独立于既有 hongguo-crack-audit HG-1 workflow。
 on:
+  push:
+    branches: ['hg3-codex']
+    paths:
+      - '.github/workflows/hongguo-crack-audit-v737.yml'
   workflow_dispatch:
     inputs:
       outer_asset:
@@ -32,6 +36,12 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OUTER_ASSET: ${{ inputs.outer_asset || 'hongguo-v7.3.7.32-crack.apk' }}
+      OUTER_SHA256: ${{ inputs.outer_sha256 || '337ff9417e672eb407ffd42481bd58eb33bea43ddd5762e1217f07597254b16e' }}
+      INNER_ASSET: ${{ inputs.inner_asset || 'hongguo-73732-inner-official.apk' }}
+      INNER_SHA256: ${{ inputs.inner_sha256 || 'a49cf486fb6c96d7b9169b3fa6a4a020295a8e46b78949b6b30fadc29b955bf9' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,25 +66,25 @@ jobs:
           set -euo pipefail
           mkdir -p work
           cd work
-          gh release download samples -R "$GITHUB_REPOSITORY" -p "${{ inputs.outer_asset }}" -p "${{ inputs.inner_asset }}" -D .
-          echo "${{ inputs.outer_sha256 }}  ${{ inputs.outer_asset }}" | sha256sum -c -
-          echo "${{ inputs.inner_sha256 }}  ${{ inputs.inner_asset }}" | sha256sum -c -
+          gh release download samples -R "$GITHUB_REPOSITORY" -p "$OUTER_ASSET" -p "$INNER_ASSET" -D .
+          echo "$OUTER_SHA256  $OUTER_ASSET" | sha256sum -c -
+          echo "$INNER_SHA256  $INNER_ASSET" | sha256sum -c -
           df -h .
 
       - name: Extract v737 dex files
         run: |
           set -euo pipefail
           cd work
-          unzip -o -j "${{ inputs.outer_asset }}" 'classes*.dex' -d hg-mod || test $? -eq 1
-          unzip -o -j "${{ inputs.inner_asset }}" 'classes*.dex' -d hg-inner
+          unzip -o "$OUTER_ASSET" 'classes*.dex' -d hg-mod || test $? -eq 1
+          unzip -o "$INNER_ASSET" 'classes*.dex' -d hg-inner
           outer_count="$(find hg-mod -maxdepth 1 -type f -name 'classes*.dex' | wc -l || true)"
           inner_count="$(find hg-inner -maxdepth 1 -type f -name 'classes*.dex' | wc -l || true)"
           echo "outer dex count: $outer_count"
           echo "inner dex count: $inner_count"
           test "$outer_count" -gt 0
           test "$inner_count" -gt 0
-          find hg-mod -maxdepth 1 -type f -name 'classes*.dex' -printf '%f %s bytes\n' | sort > outer-dex-list.txt
-          find hg-inner -maxdepth 1 -type f -name 'classes*.dex' -printf '%f %s bytes\n' | sort > inner-dex-list.txt
+          find hg-mod -type f -name 'classes*.dex' -printf '%P %s bytes\n' | sort > outer-dex-list.txt
+          find hg-inner -type f -name 'classes*.dex' -printf '%P %s bytes\n' | sort > inner-dex-list.txt
 
       - name: baksmali v737 outer and inner dex
         run: |
